@@ -78,6 +78,22 @@ function initials(name) {
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return (words[0][0] + words[1][0]).toUpperCase();
 }
+// escudos reales de los equipos del torneo (si un equipo nuevo no tiene logo cargado, cae en las iniciales)
+const TEAM_LOGOS = {
+  'Canilla Libre': '/img/teams/canilla-libre.jpg',
+  'Leal FC': '/img/teams/leal-fc.jpg',
+  'La Sede': '/img/teams/la-sede.jpg',
+  'Cementerio FC': '/img/teams/cementerio-fc.jpg',
+  'Retruco': '/img/teams/retruco.jpg',
+  'Carlos Casares': '/img/teams/carlos-casares.jpg',
+  'DDFC': '/img/teams/ddfc.jpg',
+  'Vaya al frente': '/img/teams/vaya-al-frente.jpg',
+};
+function crestHtml(name) {
+  const logo = TEAM_LOGOS[name];
+  if (logo) return `<span class="crest has-logo"><img src="${logo}" alt="${name}" loading="lazy"></span>`;
+  return `<span class="crest">${initials(name)}</span>`;
+}
 function myBalance() {
   const row = STATE.ranking.find((r) => r.name === ME);
   return row ? row.balance : 0;
@@ -459,9 +475,9 @@ function renderMatches() {
         <span class="match-id">#${m.id.slice(-4)}</span>
       </div>
       <div class="ticket-teams" onclick="toggleMatchExpand('${m.id}')">
-        <div class="team-chip"><span class="crest">${initials(m.homeName)}</span><span class="name">${m.homeName}</span></div>
+        <div class="team-chip">${crestHtml(m.homeName)}<span class="name">${m.homeName}</span></div>
         <span class="vs-badge">VS</span>
-        <div class="team-chip"><span class="crest">${initials(m.awayName)}</span><span class="name">${m.awayName}</span></div>
+        <div class="team-chip">${crestHtml(m.awayName)}<span class="name">${m.awayName}</span></div>
       </div>
       <div class="expand-hint${isOpen ? ' open' : ''}" onclick="toggleMatchExpand('${m.id}')">${isOpen ? 'Ocultar apuestas' : 'Ver apuestas de este partido'}${icon('chevron', 13)}</div>`;
 
@@ -503,9 +519,9 @@ function renderMatches() {
         <span class="match-id">#${m.id.slice(-4)}</span>
       </div>
       <div class="ticket-teams" style="cursor:default;">
-        <div class="team-chip"><span class="crest">${initials(m.homeName)}</span><span class="name">${m.homeName}</span></div>
+        <div class="team-chip">${crestHtml(m.homeName)}<span class="name">${m.homeName}</span></div>
         <span class="vs-badge">VS</span>
-        <div class="team-chip"><span class="crest">${initials(m.awayName)}</span><span class="name">${m.awayName}</span></div>
+        <div class="team-chip">${crestHtml(m.awayName)}<span class="name">${m.awayName}</span></div>
       </div>
       <div class="ticket-result-wrap"><div class="ticket-result">${r.homeGoals} – ${r.awayGoals}</div></div>
       <div class="ticket-status"><b>1x2</b> ${m.odds.home} / ${m.odds.draw} / ${m.odds.away} &nbsp;·&nbsp; <b>Goles ${m.odds.goals.line}</b> ${m.odds.goals.over} / ${m.odds.goals.under} &nbsp;·&nbsp; <b>Ambos anotan</b> ${m.odds.btts.yes} / ${m.odds.btts.no}</div>
@@ -594,7 +610,7 @@ function renderAdmin() {
   const teamsList = document.getElementById('teamsList');
   teamsList.innerHTML = STATE.teams.length
     ? STATE.teams.slice().sort((a, b) => b.rating - a.rating).map((t) =>
-        `<div class="team-line"><span class="crest">${initials(t.name)}</span><span class="name">${t.name}</span><span class="rating">${t.rating}</span></div>`
+        `<div class="team-line">${crestHtml(t.name)}<span class="name">${t.name}</span><span class="rating">${t.rating}</span></div>`
       ).join('')
     : `<div class="empty" style="padding:20px;">Agregá al menos dos equipos.</div>`;
 
