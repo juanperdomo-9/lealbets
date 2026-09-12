@@ -526,6 +526,89 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .bj-help .bj-pay-row:last-child{border-bottom:none;}
 .bj-help .bj-pay-row b{color:var(--gold);font-family:var(--font-display);font-size:12.5px;}
 
+/* ---------------------------------- casino: penales / minas ---------------------------------- */
+.casino-game{display:none;}
+.casino-game.active{display:block;}
+
+.pn-field, .mn-field{
+  background:radial-gradient(ellipse at top, var(--surface-2), var(--bg) 75%);
+  border:1px solid var(--border-soft); border-radius:var(--radius-lg);
+  padding:16px 14px; margin-bottom:14px; min-height:120px;
+}
+/* si un subtabs queda anidado dentro de .card (como el selector de dificultad),
+   ".card button" es más tardío en la hoja de estilos y tiene la misma especificidad
+   que ".subtabs button", así que le gana por orden — lo reforzamos explícitamente
+   para que no vuelva a "comerse" el estilo de píldora (mismo bug que ya pasó con
+   ".deactivate-btn"). */
+.card .subtabs{margin-top:2px;}
+.card .subtabs button{
+  width:auto; background:var(--surface); color:var(--chalk-faint); box-shadow:none;
+}
+.card .subtabs button.active{
+  background:linear-gradient(160deg, var(--gold), var(--gold-2)); color:var(--ink); box-shadow:var(--shadow-gold);
+}
+.card .subtabs button:disabled{opacity:.7; cursor:default;}
+
+.pn-goal{
+  position:relative; height:170px; margin-bottom:14px; border-radius:var(--radius-md);
+  overflow:hidden; border:3px solid var(--chalk-faint); border-bottom:none;
+  background:
+    linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px) 0 0/16px 16px,
+    linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px) 0 0/16px 16px,
+    linear-gradient(180deg, var(--surface-2), var(--surface));
+}
+.pn-goal::after{
+  content:''; position:absolute; left:0; right:0; bottom:0; height:8px;
+  background:repeating-linear-gradient(45deg, var(--chalk-faint) 0 6px, transparent 6px 12px);
+  opacity:.5;
+}
+.pn-keeper{
+  position:absolute; bottom:0; width:38px; height:52px; margin-left:-19px;
+  background:linear-gradient(160deg, var(--gold), var(--gold-2)); border-radius:8px 8px 3px 3px;
+  transition:left .35s cubic-bezier(.34,1.3,.4,1);
+}
+.pn-keeper::before{
+  content:''; position:absolute; top:-14px; left:50%; transform:translateX(-50%);
+  width:18px; height:18px; border-radius:50%; background:var(--gold-2);
+}
+.pn-ball{
+  position:absolute; width:20px; height:20px; margin-left:-10px; border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #fff, #cfcfcf 70%);
+  box-shadow:0 2px 6px rgba(0,0,0,.4);
+  transition:left .5s ease, bottom .5s ease;
+}
+.pn-goal-result{
+  position:absolute; top:8px; left:0; right:0; text-align:center; z-index:2;
+  font-family:var(--font-display); font-weight:700; font-size:16px; letter-spacing:.5px;
+  text-shadow:0 1px 4px rgba(0,0,0,.7);
+}
+.pn-goal-result.pn-scored{color:var(--green-win);}
+.pn-goal-result.pn-missed{color:var(--red);}
+.pn-ladder{display:flex; flex-direction:column-reverse; gap:6px;}
+.pn-step{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:9px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-soft);
+  background:var(--surface); color:var(--chalk-faint); font-family:var(--font-display); font-size:12.5px; font-weight:600;
+  transition:background .15s ease, color .15s ease, border-color .15s ease;
+}
+.pn-step.cleared{background:var(--surface-2); color:var(--chalk-dim); border-color:var(--border-soft);}
+.pn-step.current{color:var(--ink); background:linear-gradient(160deg, var(--gold), var(--gold-2)); border-color:transparent; box-shadow:var(--shadow-gold);}
+.pn-step .pn-mult{font-size:13px;}
+.pn-result{text-align:center;font-family:var(--font-display);color:var(--gold);margin-top:10px;font-size:15px;font-weight:700;}
+
+.mn-status{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; font-family:var(--font-display); font-size:12.5px; color:var(--chalk-dim);}
+.mn-status b{color:var(--gold); font-size:14px;}
+.mn-grid{display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; max-width:340px; margin:0 auto;}
+.mn-tile{
+  aspect-ratio:1; border-radius:9px; border:1px solid var(--border-soft); background:var(--surface);
+  display:flex; align-items:center; justify-content:center; font-size:19px; cursor:pointer;
+  transition:background .15s ease, transform .1s ease; color:var(--chalk-faint);
+}
+.mn-tile:active{transform:scale(.94);}
+.mn-tile.safe{background:linear-gradient(160deg, var(--gold), var(--gold-2)); color:var(--ink); cursor:default;}
+.mn-tile.mine{background:var(--red); color:#fff; cursor:default;}
+.mn-tile.disabled{cursor:default; opacity:.55;}
+
 /* ---------------------------------- admin ---------------------------------- */
 .card{
   border:1px solid var(--border-soft);background:var(--surface);

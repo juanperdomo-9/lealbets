@@ -14,6 +14,8 @@ const stateRoutes = require('./routes/state');
 const betsRoutes = require('./routes/bets');
 const adminRoutes = require('./routes/admin');
 const blackjackRoutes = require('./routes/blackjack');
+const penaltyRoutes = require('./routes/penalty');
+const minesRoutes = require('./routes/mines');
 
 const PORT = process.env.PORT || 3000;
 
@@ -31,6 +33,8 @@ async function main() {
   app.use('/api/bets', betsRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/blackjack', blackjackRoutes);
+  app.use('/api/penalty', penaltyRoutes);
+  app.use('/api/mines', minesRoutes);
 
   app.get('/healthz', (req, res) => res.json({ ok: true }));
 

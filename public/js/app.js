@@ -236,7 +236,11 @@ document.querySelectorAll('nav.tabs button').forEach((btn) => {
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'admin' && isAdmin) renderAdmin();
-    if (btn.dataset.tab === 'blackjack') bjLoadState();
+    if (btn.dataset.tab === 'casino') {
+      if (casinoView === 'blackjack') bjLoadState();
+      else if (casinoView === 'penalty') pnLoadState();
+      else if (casinoView === 'mines') mnLoadState();
+    }
   });
 });
 
@@ -1061,6 +1065,7 @@ function connectSocket() {
 // resultado (nunca el cliente) — acá solo se piden acciones y se anima lo
 // que el servidor ya resolvió.
 let BJ = { phase: 'none', hands: [], currentHandIndex: 0, dealerHand: [], dealerHidden: true, sideResultText: '', resultText: '' };
+let casinoView = 'blackjack';
 let bjDealingAnim = false;
 
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
@@ -1224,6 +1229,263 @@ function renderBlackjack() {
   }
 }
 
+// ---------- casino: selector de juego ----------
+function setCasinoView(view) {
+  casinoView = view;
+  document.querySelectorAll('#casinoSubtabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.casino-game').forEach((el) => el.classList.toggle('active', el.id === 'casino-' + view));
+  if (view === 'blackjack') bjLoadState();
+  else if (view === 'penalty') pnLoadState();
+  else if (view === 'mines') mnLoadState();
+}
+
+// ---------- penales (tanda de penaltis) ----------
+let PN = { phase: 'none', difficulty: 'media', ladder: [], round: 0, multiplier: 1, nextMultiplier: null, lastKickResult: null, resultText: '' };
+let pnSelectedDifficulty = 'media';
+// estado puramente visual del arco (pelota/arquero); el resultado real ya lo
+// decidió el servidor en /penalty/kick, esto solo lo dramatiza en pantalla.
+const PN_POSITIONS = ['18%', '50%', '82%'];
+function pnRestingVisual() { return { ballIdx: 1, keeperIdx: 1, kicked: false, scored: null, animating: false }; }
+let pnVisual = pnRestingVisual();
+
+async function pnLoadState() {
+  if (!ME) { renderPenalty(); return; }
+  try { PN = await apiFetch('/penalty/state'); } catch (e) { /* ignorar, se reintenta solo */ }
+  if (PN.difficulty) pnSelectedDifficulty = PN.difficulty;
+  pnVisual = pnRestingVisual();
+  renderPenalty();
+}
+
+function pnSetDifficulty(d) {
+  if (PN.phase === 'active') return;
+  pnSelectedDifficulty = d;
+  renderPenalty();
+}
+
+async function pnStart() {
+  if (!ME) { toast('Entrá con tu usuario para jugar'); return; }
+  const stake = parseInt(document.getElementById('pnStakeInput').value, 10);
+  if (!stake || stake <= 0) { toast('Poné un monto válido'); return; }
+  try {
+    const result = await apiFetch('/penalty/start', { method: 'POST', body: { stake, difficulty: pnSelectedDifficulty } });
+    applyBalanceUpdate(result.balance);
+    PN = result;
+    pnVisual = pnRestingVisual();
+    renderPenalty();
+  } catch (e) { toast(e.message); }
+}
+async function pnKick() {
+  if (pnVisual.animating) return;
+  try {
+    pnVisual = { ...pnRestingVisual(), animating: true };
+    renderPenalty();
+    const result = await apiFetch('/penalty/kick', { method: 'POST' });
+    applyBalanceUpdate(result.balance);
+    const scored = result.lastKickResult === 'scored';
+    const ballIdx = Math.floor(Math.random() * 3);
+    let keeperIdx;
+    if (scored) {
+      const options = [0, 1, 2].filter((p) => p !== ballIdx);
+      keeperIdx = options[Math.floor(Math.random() * options.length)];
+    } else {
+      keeperIdx = ballIdx; // el arquero adivina el palo y ataja
+    }
+    PN = result;
+    pnVisual = { ballIdx, keeperIdx, kicked: true, scored, animating: true };
+    renderPenalty();
+    await sleep(1000);
+    pnVisual = { ...pnVisual, kicked: false, animating: false };
+    renderPenalty();
+  } catch (e) {
+    pnVisual = pnRestingVisual();
+    renderPenalty();
+    toast(e.message);
+  }
+}
+async function pnCashout() {
+  try {
+    const result = await apiFetch('/penalty/cashout', { method: 'POST' });
+    applyBalanceUpdate(result.balance);
+    PN = result;
+    renderPenalty();
+  } catch (e) { toast(e.message); }
+}
+
+function renderPenalty() {
+  const field = document.getElementById('penaltyField');
+  const actionsBox = document.getElementById('pnActions');
+  const startBtn = document.getElementById('pnStartBtn');
+  const stakeInput = document.getElementById('pnStakeInput');
+  if (!field || !actionsBox || !startBtn || !stakeInput) return;
+
+  if (!ME) {
+    field.innerHTML = `<div class="empty">${icon('lock', 26)}Entrá con tu usuario para jugar.</div>`;
+    actionsBox.style.display = 'none';
+    startBtn.style.display = 'none';
+    stakeInput.disabled = true;
+    return;
+  }
+
+  const active = PN.phase === 'active';
+  document.querySelectorAll('#pnDifficultySubtabs button').forEach((b) => {
+    b.disabled = active;
+    b.classList.toggle('active', b.dataset.diff === pnSelectedDifficulty);
+  });
+
+  const ballLeft = PN_POSITIONS[pnVisual.ballIdx];
+  const keeperLeft = PN_POSITIONS[pnVisual.keeperIdx];
+  const ballBottom = pnVisual.kicked ? '124px' : '6px';
+  let resultBanner = '';
+  if (pnVisual.kicked) {
+    resultBanner = pnVisual.scored
+      ? `<div class="pn-goal-result pn-scored">¡GOL!</div>`
+      : `<div class="pn-goal-result pn-missed">¡ATAJADA!</div>`;
+  }
+  let html = `<div class="pn-goal">${resultBanner}<div class="pn-keeper" style="left:${keeperLeft};"></div><div class="pn-ball" style="left:${ballLeft};bottom:${ballBottom};"></div></div>`;
+
+  if (!PN.ladder || PN.ladder.length === 0) {
+    html += `<div class="empty">${icon('ball', 26)}Elegí la dificultad y cuánto apostar, y tocá "Empezar".</div>`;
+  } else {
+    const rows = PN.ladder.map((mult, i) => {
+      const round = i + 1;
+      let cls = '';
+      if (round <= PN.round) cls = 'cleared';
+      else if (active && round === PN.round + 1) cls = 'current';
+      return `<div class="pn-step ${cls}"><span class="pn-round">Penal ${round}</span><span class="pn-mult">x${mult.toFixed(2)}</span></div>`;
+    });
+    html += `<div class="pn-ladder">${rows.join('')}</div>`;
+    if (PN.phase === 'done' && PN.resultText) html += `<div class="pn-result">${PN.resultText}</div>`;
+  }
+  field.innerHTML = html;
+
+  startBtn.style.display = active ? 'none' : 'block';
+  stakeInput.disabled = active;
+  actionsBox.style.display = active ? 'flex' : 'none';
+  if (active) {
+    const kickBtn = actionsBox.querySelector('button:not(.bj-secondary)');
+    const cashoutBtn = actionsBox.querySelector('.bj-secondary');
+    if (kickBtn) kickBtn.disabled = pnVisual.animating;
+    if (cashoutBtn) cashoutBtn.disabled = PN.round === 0 || pnVisual.animating;
+  }
+}
+
+// ---------- minas ----------
+let MN = { phase: 'none', minesCount: 5, stake: 0, revealed: [], grid: null, revealedCount: 0, multiplier: 1, nextMultiplier: null, resultText: '' };
+let mnSelectedMines = 5;
+
+function mnPopulateMinesSelect() {
+  const sel = document.getElementById('mnMinesSelect');
+  if (!sel || sel.options.length) return;
+  for (let i = 1; i <= 24; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${i} mina${i > 1 ? 's' : ''}`;
+    sel.appendChild(opt);
+  }
+  sel.value = mnSelectedMines;
+  sel.addEventListener('change', () => { mnSelectedMines = parseInt(sel.value, 10); });
+}
+
+async function mnLoadState() {
+  if (!ME) { renderMines(); return; }
+  try { MN = await apiFetch('/mines/state'); } catch (e) { /* ignorar, se reintenta solo */ }
+  if (MN.minesCount) mnSelectedMines = MN.minesCount;
+  renderMines();
+}
+
+async function mnStart() {
+  if (!ME) { toast('Entrá con tu usuario para jugar'); return; }
+  const stake = parseInt(document.getElementById('mnStakeInput').value, 10);
+  const mines = parseInt(document.getElementById('mnMinesSelect').value, 10) || mnSelectedMines;
+  if (!stake || stake <= 0) { toast('Poné un monto válido'); return; }
+  try {
+    const result = await apiFetch('/mines/start', { method: 'POST', body: { stake, mines } });
+    applyBalanceUpdate(result.balance);
+    MN = result;
+    renderMines();
+  } catch (e) { toast(e.message); }
+}
+async function mnReveal(index) {
+  if (MN.phase !== 'active' || MN.revealed[index]) return;
+  try {
+    const result = await apiFetch('/mines/reveal', { method: 'POST', body: { index } });
+    applyBalanceUpdate(result.balance);
+    MN = result;
+    renderMines();
+  } catch (e) { toast(e.message); }
+}
+async function mnCashout() {
+  try {
+    const result = await apiFetch('/mines/cashout', { method: 'POST' });
+    applyBalanceUpdate(result.balance);
+    MN = result;
+    renderMines();
+  } catch (e) { toast(e.message); }
+}
+
+function renderMines() {
+  const field = document.getElementById('minesField');
+  const actionsBox = document.getElementById('mnActions');
+  const startBtn = document.getElementById('mnStartBtn');
+  const stakeInput = document.getElementById('mnStakeInput');
+  const minesSelect = document.getElementById('mnMinesSelect');
+  if (!field || !actionsBox || !startBtn || !stakeInput || !minesSelect) return;
+
+  mnPopulateMinesSelect();
+
+  if (!ME) {
+    field.innerHTML = `<div class="empty">${icon('lock', 26)}Entrá con tu usuario para jugar.</div>`;
+    actionsBox.style.display = 'none';
+    startBtn.style.display = 'none';
+    stakeInput.disabled = minesSelect.disabled = true;
+    return;
+  }
+
+  const active = MN.phase === 'active';
+  stakeInput.disabled = minesSelect.disabled = active;
+  startBtn.style.display = active ? 'none' : 'block';
+  if (!active) minesSelect.value = mnSelectedMines;
+
+  if (MN.phase === 'none') {
+    field.innerHTML = `<div class="empty">${icon('ball', 26)}Elegí cuántas minas y cuánto apostar, y tocá "Empezar".</div>`;
+    actionsBox.style.display = 'none';
+    return;
+  }
+
+  const revealed = MN.revealed || [];
+  const grid = MN.grid; // solo viene del servidor cuando la partida terminó
+  let tilesHtml = '';
+  for (let i = 0; i < 25; i++) {
+    const isRevealed = revealed[i];
+    const isMineHere = MN.phase === 'done' && grid && grid[i];
+    const clickable = MN.phase === 'active' && !isRevealed;
+    let cls = 'mn-tile';
+    let content = '';
+    // el casillero que pisó la mina también queda "revelado" del lado del servidor,
+    // así que hay que mostrarlo como mina (no como diamante) aunque revealed[i] sea true.
+    if (isMineHere) {
+      cls += ' mine';
+      content = '💣';
+    } else if (isRevealed) {
+      cls += ' safe';
+      content = '💎';
+    } else if (!clickable) {
+      cls += ' disabled';
+    }
+    tilesHtml += `<div class="${cls}"${clickable ? ` onclick="mnReveal(${i})"` : ''}>${content}</div>`;
+  }
+
+  const nextMultTxt = MN.nextMultiplier != null ? `x${MN.nextMultiplier.toFixed(2)}` : '—';
+  const statusHtml = `<div class="mn-status"><span>Cuota actual: <b>x${MN.multiplier.toFixed(2)}</b></span><span>Próxima: ${nextMultTxt}</span></div>`;
+  field.innerHTML = statusHtml + `<div class="mn-grid">${tilesHtml}</div>` + (MN.phase === 'done' && MN.resultText ? `<div class="pn-result">${MN.resultText}</div>` : '');
+
+  actionsBox.style.display = active ? 'flex' : 'none';
+  if (active) {
+    const cashoutBtn = actionsBox.querySelector('button');
+    if (cashoutBtn) cashoutBtn.disabled = (MN.revealedCount || 0) === 0;
+  }
+}
+
 // ---------- init ----------
 (async function init() {
   await refreshFromServer(true);
@@ -1239,6 +1501,8 @@ function renderBlackjack() {
       await loadMyBets();
       renderAll(true);
       await bjLoadState(); // por si había una mano de blackjack a mitad de jugar
+      await pnLoadState(); // por si había una tanda de penales a mitad de jugar
+      await mnLoadState(); // por si había una partida de minas a mitad de jugar
     } catch (e) {
       TOKEN = null;
       localStorage.removeItem('lb_token');
@@ -1249,6 +1513,8 @@ function renderBlackjack() {
     showGate();
   }
   renderBlackjack();
+  renderPenalty();
+  renderMines();
 
   const adminToken = localStorage.getItem('lb_admin_token');
   if (adminToken) {
