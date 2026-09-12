@@ -4,19 +4,29 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Leal Bets</title>
+<meta name="theme-color" content="#071813">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
 <div id="gate" class="gate">
   <div class="gate-shield">CR</div>
-  <h1 style="font-size:24px;">Copa del Rey</h1>
+  <h1>Copa del Rey</h1>
   <p>Elegí un usuario y contraseña. Si es la primera vez, se crea tu cuenta con 30.000 fichas; si ya la usaste antes, entrás a la misma.</p>
-  <input id="nameInput" type="text" placeholder="Tu nombre de usuario" maxlength="20">
-  <input id="passwordInput" type="password" placeholder="Contraseña" maxlength="30">
-  <button onclick="joinAsPlayer()">Entrar</button>
+  <div class="field">
+    <span class="icon" id="userIcon"></span>
+    <input id="nameInput" type="text" placeholder="Tu nombre de usuario" maxlength="20">
+  </div>
+  <div class="field">
+    <span class="icon" id="lockIcon"></span>
+    <input id="passwordInput" type="password" placeholder="Contraseña" maxlength="30">
+  </div>
+  <button onclick="joinAsPlayer()"><span id="enterIcon" class="icon"></span>Entrar</button>
 </div>
 
 <div id="app" class="wrap" style="display:none;">
@@ -30,9 +40,11 @@
         </div>
       </div>
       <div class="player-box">
-        <div class="player-name" id="playerNameLbl">—</div>
-        <div class="chip-count"><span id="chipCount">0</span> <span>fichas</span></div>
-        <button class="switch-player" onclick="switchPlayer()">cambiar de jugador</button>
+        <div class="player-meta">
+          <div class="player-name" id="playerNameLbl">—</div>
+          <button class="switch-player" onclick="switchPlayer()">cambiar de jugador</button>
+        </div>
+        <div class="chip-count"><span class="icon" id="walletIcon"></span><span id="chipCount">0</span><span class="unit">fichas</span></div>
       </div>
     </div>
   </header>
@@ -54,10 +66,7 @@
     </section>
 
     <section id="tab-ranking">
-      <table class="ranking">
-        <thead><tr><th></th><th>Jugador</th><th style="text-align:right;">Fichas</th></tr></thead>
-        <tbody id="rankingBody"></tbody>
-      </table>
+      <div id="rankingBody"></div>
     </section>
 
     <section id="tab-admin">

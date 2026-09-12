@@ -11,6 +11,36 @@ let MY_BETS = [];
 let CART = [];
 let cartPanelOpen = false;
 let expandedMatches = new Set();
+let expandedPlayers = new Set();
+
+// ---------- íconos (SVG en línea, sin dependencias externas) ----------
+const ICONS = {
+  chevron: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  close: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>`,
+  user: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`,
+  lock: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>`,
+  login: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>`,
+  wallet: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16.5" cy="14" r="1"/></svg>`,
+  trophy: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v4a4 4 0 0 1-8 0z"/><path d="M8 5H5a3 3 0 0 0 3 3"/><path d="M16 5h3a3 3 0 0 1-3 3"/><path d="M9 19h6"/><path d="M12 12v7"/></svg>`,
+  ball: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8l3.3 2.4-1.3 3.9H10L8.7 10.4z"/><path d="M12 8V4.5M15.3 10.4l3-2M14 14.3l1.7 3.4M10 14.3L8.3 17.7M8.7 10.4l-3-2"/></svg>`,
+  shuffle: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>`,
+  goal: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V6h16v14"/><path d="M4 10h16"/><path d="M4 6l3 4M20 6l-3 4"/></svg>`,
+  handshake: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13l4-4 4 2 4-2 4 4-4 4-4-2-4 2z"/><path d="M9 11l3 3 7-7"/></svg>`,
+  users: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3-6 7-6s7 2.7 7 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2c2.7.5 5 2.6 5 5.8"/></svg>`,
+  undo: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>`,
+  ticket: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/><line x1="10" y1="6.5" x2="10" y2="8" stroke-dasharray="1 2"/><line x1="10" y1="16" x2="10" y2="17.5" stroke-dasharray="1 2"/><line x1="10" y1="11" x2="10" y2="13" stroke-dasharray="1 2"/></svg>`,
+};
+function icon(name, size) {
+  const s = size || 14;
+  return `<span class="icon">${(ICONS[name] || '').split('{s}').join(s)}</span>`;
+}
+
+// rellena los íconos de los elementos estáticos del HTML (gate + header)
+document.getElementById('userIcon').innerHTML = ICONS.user.split('{s}').join(16);
+document.getElementById('lockIcon').innerHTML = ICONS.lock.split('{s}').join(16);
+document.getElementById('enterIcon').innerHTML = ICONS.login.split('{s}').join(16);
+document.getElementById('walletIcon').innerHTML = ICONS.wallet.split('{s}').join(14);
 
 // ---------- api helper ----------
 async function apiFetch(path, opts = {}) {
@@ -38,9 +68,10 @@ async function apiFetch(path, opts = {}) {
 
 function toast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  t.innerHTML = `${icon('check', 13)}<span>${msg}</span>`;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 1800);
+  clearTimeout(t._hideTimer);
+  t._hideTimer = setTimeout(() => t.classList.remove('show'), 2200);
 }
 function initials(name) {
   const words = name.trim().split(/\s+/);
@@ -101,6 +132,16 @@ function oddsFor(m, pick) {
 }
 function sel(m, pick) {
   return CART.some((l) => l.matchId === m.id && l.pick === pick) ? ' selected' : '';
+}
+function isSelected(matchId, pick) {
+  return CART.some((l) => l.matchId === matchId && l.pick === pick);
+}
+function oddsBtn(matchId, pick, label, value) {
+  const selected = isSelected(matchId, pick);
+  return `<div class="odds-btn${selected ? ' selected' : ''}" onclick="toggleLeg('${matchId}','${pick}')">
+    <span class="lbl">${label}</span><span class="val">${value}</span>
+    ${selected ? `<span class="check">${icon('check', 9)}</span>` : ''}
+  </div>`;
 }
 // El orden de las claves de un objeto que pasó por jsonb en Postgres no está
 // garantizado, así que el orden de exhibición de los jugadores de Leal viaja
@@ -261,6 +302,11 @@ function toggleMatchExpand(matchId) {
   else expandedMatches.add(matchId);
   renderMatches();
 }
+function togglePlayerExpand(key) {
+  if (expandedPlayers.has(key)) expandedPlayers.delete(key);
+  else expandedPlayers.add(key);
+  renderMatches();
+}
 function toggleLeg(matchId, pick) {
   if (!ME) { toast('Entrá con tu usuario para apostar'); return; }
   const m = STATE.matches.find((mm) => mm.id === matchId);
@@ -328,22 +374,22 @@ function renderCartBar() {
   if (CART.length === 0) { bar.innerHTML = ''; return; }
   const combinedOdds = combinedOddsValue();
   let html = `<div class="cart-summary" onclick="toggleCartPanel()">
-    <div class="info">${CART.length} ${CART.length === 1 ? 'selección' : 'selecciones'}<small>cuota combinada ${combinedOdds}</small></div>
-    <div class="toggle">${cartPanelOpen ? 'Cerrar' : 'Ver apuesta'}</div>
+    <div class="info"><span class="badge">${CART.length}</span>${CART.length === 1 ? 'selección' : 'selecciones'}<small>cuota combinada ${combinedOdds}</small></div>
+    <div class="toggle${cartPanelOpen ? ' open' : ''}">${cartPanelOpen ? 'Cerrar' : 'Ver apuesta'}${icon('chevron', 13)}</div>
   </div>`;
   if (cartPanelOpen) {
     html += `<div class="cart-panel">`;
     CART.forEach((l, i) => {
       html += `<div class="cart-leg">
         <span>${l.matchLabel}<small>${l.label} · cuota ${l.odds}</small></span>
-        <button class="remove" onclick="removeFromCart(${i})">✕</button>
+        <button class="remove" onclick="removeFromCart(${i})">${icon('close', 12)}</button>
       </div>`;
     });
     html += `<div class="slip" style="border-top:none;padding-top:12px;">
       <label>Monto a apostar (fichas)</label>
       <div class="slip-row">
         <input id="comboStake" type="number" min="1" placeholder="Fichas" oninput="updateComboPreview()">
-        <button class="confirm" onclick="confirmCombo()">Confirmar</button>
+        <button class="confirm" onclick="confirmCombo()">${icon('check', 13)}Confirmar</button>
       </div>
       <div class="payout" id="comboPreview">Si acertás todo, cobrás fichas × ${combinedOdds}</div>
     </div>`;
@@ -360,28 +406,36 @@ function renderPlayerPropsBlock(m) {
   const BINARY_MARKETS = [
     ['gol', 'Gol'], ['asistencia', 'Asistencia'], ['amarilla', 'Amarilla'], ['roja', 'Roja'],
   ];
-  let html = `<div class="market-label">Jugadores de LEAL</div>`;
+  let html = `<div class="market-label">${icon('users')}Jugadores de LEAL</div>`;
   for (const playerName of orderedPlayerNames(m.playerProps)) {
     const props = m.playerProps[playerName];
-    html += `<div class="player-props"><div class="player-props-name">${playerName}</div>`;
-    for (const [market, label] of THRESHOLD_MARKETS) {
-      if (!props[market]) continue;
-      const thresholds = Object.keys(props[market]);
-      html += `<div class="prop-sublabel">${label}</div><div class="odds-row" style="grid-template-columns:repeat(${thresholds.length},1fr);">`;
-      for (const t of thresholds) {
-        const pick = `prop|${playerName}|${market}|${t}`;
-        html += `<div class="odds-btn${sel(m, pick)}" onclick="toggleLeg('${m.id}','${pick}')"><span class="lbl">${t}+</span><span class="val">${props[market][t]}</span></div>`;
+    const key = m.id + '::' + playerName;
+    const isPlayerOpen = expandedPlayers.has(key);
+    // cuántas selecciones de este jugador ya están en la combinada (para mostrarlo aunque esté colapsado)
+    const pickedCount = CART.filter((l) => l.matchId === m.id && l.pick.startsWith(`prop|${playerName}|`)).length;
+    html += `<div class="player-props">
+      <div class="player-props-name${isPlayerOpen ? ' open' : ''}" onclick="togglePlayerExpand('${key}')">
+        <span class="player-props-left"><span class="player-avatar">${initials(playerName)}</span>${playerName}${pickedCount ? `<span class="player-picked-badge">${pickedCount}</span>` : ''}</span>
+        <span class="player-props-toggle">${icon('chevron', 13)}</span>
+      </div>`;
+    if (isPlayerOpen) {
+      for (const [market, label] of THRESHOLD_MARKETS) {
+        if (!props[market]) continue;
+        const thresholds = Object.keys(props[market]);
+        html += `<div class="prop-sublabel">${label}</div><div class="odds-row" style="grid-template-columns:repeat(${thresholds.length},1fr);">`;
+        for (const t of thresholds) {
+          html += oddsBtn(m.id, `prop|${playerName}|${market}|${t}`, `${t}+`, props[market][t]);
+        }
+        html += `</div>`;
       }
-      html += `</div>`;
-    }
-    const activeBinary = BINARY_MARKETS.filter(([market]) => props[market] !== undefined);
-    if (activeBinary.length) {
-      html += `<div class="odds-row" style="grid-template-columns:repeat(${activeBinary.length},1fr);margin-top:6px;">`;
-      for (const [market, label] of activeBinary) {
-        const pick = `prop|${playerName}|${market}`;
-        html += `<div class="odds-btn${sel(m, pick)}" onclick="toggleLeg('${m.id}','${pick}')"><span class="lbl">${label}</span><span class="val">${props[market]}</span></div>`;
+      const activeBinary = BINARY_MARKETS.filter(([market]) => props[market] !== undefined);
+      if (activeBinary.length) {
+        html += `<div class="odds-row" style="grid-template-columns:repeat(${activeBinary.length},1fr);margin-top:6px;">`;
+        for (const [market, label] of activeBinary) {
+          html += oddsBtn(m.id, `prop|${playerName}|${market}`, label, props[market]);
+        }
+        html += `</div>`;
       }
-      html += `</div>`;
     }
     html += `</div>`;
   }
@@ -393,76 +447,80 @@ function renderMatches() {
   const upcoming = STATE.matches.filter((m) => m.status === 'upcoming').sort((a, b) => b.createdAt - a.createdAt);
   const finished = STATE.matches.filter((m) => m.status === 'finished').sort((a, b) => b.createdAt - a.createdAt);
   if (STATE.matches.length === 0) {
-    list.innerHTML = '<div class="empty">Todavía no hay partidos cargados.<br>Andá a la pestaña Equipos para programar el primero.</div>';
+    list.innerHTML = `<div class="empty">${icon('ball', 30)}Todavía no hay partidos cargados.<br>Andá a la pestaña Equipos para programar el primero.</div>`;
     return;
   }
   let html = '';
   for (const m of upcoming) {
     const isOpen = expandedMatches.has(m.id);
-    html += `<div class="ticket">
-      <div class="ticket-meta"><span>Próximo</span><span>#${m.id.slice(-4)}</span></div>
-      <div class="ticket-teams" onclick="toggleMatchExpand('${m.id}')" style="cursor:pointer;">
+    html += `<div class="ticket"><div class="ticket-body">
+      <div class="ticket-meta">
+        <span class="status-pill upcoming"><span class="dot"></span>Próximo</span>
+        <span class="match-id">#${m.id.slice(-4)}</span>
+      </div>
+      <div class="ticket-teams" onclick="toggleMatchExpand('${m.id}')">
         <div class="team-chip"><span class="crest">${initials(m.homeName)}</span><span class="name">${m.homeName}</span></div>
-        <span class="vs">vs</span>
+        <span class="vs-badge">VS</span>
         <div class="team-chip"><span class="crest">${initials(m.awayName)}</span><span class="name">${m.awayName}</span></div>
       </div>
-      <div class="expand-hint" onclick="toggleMatchExpand('${m.id}')">${isOpen ? 'Ocultar apuestas ▴' : 'Ver apuestas de este partido ▾'}</div>`;
+      <div class="expand-hint${isOpen ? ' open' : ''}" onclick="toggleMatchExpand('${m.id}')">${isOpen ? 'Ocultar apuestas' : 'Ver apuestas de este partido'}${icon('chevron', 13)}</div>`;
 
     if (isOpen) {
       html += `
-      <div class="market-label">Resultado</div>
+      <div class="market-label">${icon('ball')}Resultado</div>
       <div class="odds-row">
-        <div class="odds-btn${sel(m, 'home')}" onclick="toggleLeg('${m.id}','home')"><span class="lbl">${m.homeName}</span><span class="val">${m.odds.home}</span></div>
-        <div class="odds-btn${sel(m, 'draw')}" onclick="toggleLeg('${m.id}','draw')"><span class="lbl">Empate</span><span class="val">${m.odds.draw}</span></div>
-        <div class="odds-btn${sel(m, 'away')}" onclick="toggleLeg('${m.id}','away')"><span class="lbl">${m.awayName}</span><span class="val">${m.odds.away}</span></div>
+        ${oddsBtn(m.id, 'home', m.homeName, m.odds.home)}
+        ${oddsBtn(m.id, 'draw', 'Empate', m.odds.draw)}
+        ${oddsBtn(m.id, 'away', m.awayName, m.odds.away)}
       </div>
 
-      <div class="market-label">Doble oportunidad</div>
+      <div class="market-label">${icon('shuffle')}Doble oportunidad</div>
       <div class="odds-row">
-        <div class="odds-btn${sel(m, 'dc_1x')}" onclick="toggleLeg('${m.id}','dc_1x')"><span class="lbl">${m.homeName} o X</span><span class="val">${m.odds.dc.oneX}</span></div>
-        <div class="odds-btn${sel(m, 'dc_12')}" onclick="toggleLeg('${m.id}','dc_12')"><span class="lbl">1 o 2</span><span class="val">${m.odds.dc.oneTwo}</span></div>
-        <div class="odds-btn${sel(m, 'dc_x2')}" onclick="toggleLeg('${m.id}','dc_x2')"><span class="lbl">X o ${m.awayName}</span><span class="val">${m.odds.dc.xTwo}</span></div>
+        ${oddsBtn(m.id, 'dc_1x', m.homeName + ' o X', m.odds.dc.oneX)}
+        ${oddsBtn(m.id, 'dc_12', '1 o 2', m.odds.dc.oneTwo)}
+        ${oddsBtn(m.id, 'dc_x2', 'X o ' + m.awayName, m.odds.dc.xTwo)}
       </div>
 
-      <div class="market-label">Goles (línea ${m.odds.goals.line})</div>
+      <div class="market-label">${icon('goal')}Goles (línea ${m.odds.goals.line})</div>
       <div class="odds-row" style="grid-template-columns:1fr 1fr;">
-        <div class="odds-btn${sel(m, 'goals_over')}" onclick="toggleLeg('${m.id}','goals_over')"><span class="lbl">Más de ${m.odds.goals.line}</span><span class="val">${m.odds.goals.over}</span></div>
-        <div class="odds-btn${sel(m, 'goals_under')}" onclick="toggleLeg('${m.id}','goals_under')"><span class="lbl">Menos de ${m.odds.goals.line}</span><span class="val">${m.odds.goals.under}</span></div>
+        ${oddsBtn(m.id, 'goals_over', 'Más de ' + m.odds.goals.line, m.odds.goals.over)}
+        ${oddsBtn(m.id, 'goals_under', 'Menos de ' + m.odds.goals.line, m.odds.goals.under)}
       </div>
 
-      <div class="market-label">Ambos equipos anotan</div>
+      <div class="market-label">${icon('handshake')}Ambos equipos anotan</div>
       <div class="odds-row" style="grid-template-columns:1fr 1fr;">
-        <div class="odds-btn${sel(m, 'btts_yes')}" onclick="toggleLeg('${m.id}','btts_yes')"><span class="lbl">Sí</span><span class="val">${m.odds.btts.yes}</span></div>
-        <div class="odds-btn${sel(m, 'btts_no')}" onclick="toggleLeg('${m.id}','btts_no')"><span class="lbl">No</span><span class="val">${m.odds.btts.no}</span></div>
+        ${oddsBtn(m.id, 'btts_yes', 'Sí', m.odds.btts.yes)}
+        ${oddsBtn(m.id, 'btts_no', 'No', m.odds.btts.no)}
       </div>${m.playerProps ? renderPlayerPropsBlock(m) : ''}`;
     }
-    html += `</div>`;
+    html += `</div></div>`;
   }
   for (const m of finished) {
     const r = m.result;
-    html += `<div class="ticket" style="opacity:0.75;">
-      <div class="ticket-meta"><span>Finalizado</span><span>#${m.id.slice(-4)}</span></div>
-      <div class="ticket-teams">
+    html += `<div class="ticket finished"><div class="ticket-body">
+      <div class="ticket-meta">
+        <span class="status-pill finished"><span class="dot"></span>Finalizado</span>
+        <span class="match-id">#${m.id.slice(-4)}</span>
+      </div>
+      <div class="ticket-teams" style="cursor:default;">
         <div class="team-chip"><span class="crest">${initials(m.homeName)}</span><span class="name">${m.homeName}</span></div>
-        <span class="vs">vs</span>
+        <span class="vs-badge">VS</span>
         <div class="team-chip"><span class="crest">${initials(m.awayName)}</span><span class="name">${m.awayName}</span></div>
       </div>
-      <div class="ticket-result">${r.homeGoals} - ${r.awayGoals}</div>
-      <div class="ticket-status">1x2: ${m.odds.home} / ${m.odds.draw} / ${m.odds.away} · Goles ${m.odds.goals.line}: ${m.odds.goals.over} / ${m.odds.goals.under} · Ambos anotan: ${m.odds.btts.yes} / ${m.odds.btts.no}</div>
-      ${isAdmin ? `<div style="text-align:center;margin-top:10px;">
-        <button onclick="reopenMatch('${m.id}')" style="background:none;border:1px solid var(--line);color:var(--chalk-dim);padding:7px 14px;font-family:'Work Sans',sans-serif;font-size:12px;cursor:pointer;">Reabrir partido (corregir resultado)</button>
-      </div>` : ''}
-    </div>`;
+      <div class="ticket-result-wrap"><div class="ticket-result">${r.homeGoals} – ${r.awayGoals}</div></div>
+      <div class="ticket-status"><b>1x2</b> ${m.odds.home} / ${m.odds.draw} / ${m.odds.away} &nbsp;·&nbsp; <b>Goles ${m.odds.goals.line}</b> ${m.odds.goals.over} / ${m.odds.goals.under} &nbsp;·&nbsp; <b>Ambos anotan</b> ${m.odds.btts.yes} / ${m.odds.btts.no}</div>
+      ${isAdmin ? `<button class="reopen-btn" onclick="reopenMatch('${m.id}')">${icon('undo', 13)}Reabrir partido (corregir resultado)</button>` : ''}
+    </div></div>`;
   }
   list.innerHTML = html;
 }
 
 function renderMyBets() {
   const list = document.getElementById('myBetsList');
-  if (!ME) { list.innerHTML = '<div class="empty">Entrá con tu usuario para ver tus apuestas.</div>'; return; }
+  if (!ME) { list.innerHTML = `<div class="empty">${icon('lock', 26)}Entrá con tu usuario para ver tus apuestas.</div>`; return; }
   const mine = MY_BETS.slice().sort((a, b) => b.placedAt - a.placedAt);
   if (mine.length === 0) {
-    list.innerHTML = '<div class="empty">Todavía no hiciste ninguna apuesta.</div>';
+    list.innerHTML = `<div class="empty">${icon('ticket', 28)}Todavía no hiciste ninguna apuesta.</div>`;
     return;
   }
   list.innerHTML = mine.map((b) => {
@@ -472,19 +530,21 @@ function renderMyBets() {
       return l.result === 'void' ? `${label} — anulada` : label;
     }).join(' + ');
     const payoutOdds = b.effectiveOdds || b.combinedOdds;
-    const tag = b.cancelled ? `<span class="bet-tag pending">Cancelada</span>` :
-      b.voided ? `<span class="bet-tag pending">Anulada (devuelto)</span>` :
-      !b.settled ? `<span class="bet-tag pending">Pendiente</span>` :
-      b.won ? `<span class="bet-tag win">+${Math.round(b.stake * payoutOdds)}</span>` :
-      `<span class="bet-tag lose">-${b.stake}</span>`;
+    let statusClass = 'st-pending';
+    let tag = `<span class="bet-tag pending">Pendiente</span>`;
+    if (b.cancelled) { statusClass = 'st-void'; tag = `<span class="bet-tag pending">Cancelada</span>`; }
+    else if (b.voided) { statusClass = 'st-void'; tag = `<span class="bet-tag pending">Anulada (devuelto)</span>`; }
+    else if (!b.settled) { statusClass = 'st-pending'; tag = `<span class="bet-tag pending">Pendiente</span>`; }
+    else if (b.won) { statusClass = 'st-win'; tag = `<span class="bet-tag win">+${Math.round(b.stake * payoutOdds)}</span>`; }
+    else { statusClass = 'st-lose'; tag = `<span class="bet-tag lose">-${b.stake}</span>`; }
     const comboTag = b.legs.length > 1 ? 'Combinada · ' : '';
     const potentialOdds = Math.round(b.legs.filter((l) => l.result !== 'void').reduce((p, l) => p * l.oddsAtBet, 1) * 100) / 100;
     const potentialText = (!b.settled && !b.cancelled) ? ` · si ganás, cobrás ${Math.round(b.stake * potentialOdds)} fichas` : '';
     const cashOutBtn = (!b.settled && !b.cancelled)
-      ? `<button onclick="cashOutBet('${b.id}')" style="margin-top:8px;background:none;border:1px solid var(--line);color:var(--chalk-dim);padding:6px 12px;font-family:'Work Sans',sans-serif;font-size:12px;cursor:pointer;">Cerrar apuesta (devolver ${b.stake} fichas)</button>`
+      ? `<button class="bet-cashout" onclick="cashOutBet('${b.id}')">${icon('close', 11)}Cerrar apuesta (devolver ${b.stake} fichas)</button>`
       : '';
-    return `<div class="bet-row" style="flex-direction:column;align-items:stretch;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
+    return `<div class="bet-row ${statusClass}">
+      <div class="bet-row-top">
         <div class="desc">${legsDesc}<small>${comboTag}${b.stake} fichas a cuota ${b.combinedOdds}${potentialText}</small></div>
         ${tag}
       </div>
@@ -496,11 +556,12 @@ function renderMyBets() {
 function renderRanking() {
   const body = document.getElementById('rankingBody');
   const rows = STATE.ranking;
-  body.innerHTML = rows.map((r, i) => `<tr>
-    <td class="pos">${i + 1}</td>
-    <td>${r.name}${r.name === ME ? ' (vos)' : ''}</td>
-    <td class="bal">${Math.round(r.balance)}</td>
-  </tr>`).join('');
+  if (rows.length === 0) { body.innerHTML = `<div class="empty">${icon('trophy', 28)}Todavía no hay jugadores.</div>`; return; }
+  body.innerHTML = rows.map((r, i) => `<div class="rank-row${r.name === ME ? ' me' : ''}">
+    <div class="rank-pos">${i + 1}</div>
+    <div class="rank-name">${r.name}${r.name === ME ? '<span class="you-tag">VOS</span>' : ''}</div>
+    <div class="rank-bal">${icon('wallet', 14)}${Math.round(r.balance)}</div>
+  </div>`).join('');
 }
 
 function renderPlayerStatsForm() {
@@ -524,7 +585,7 @@ function renderPlayerStatsForm() {
     html += `</div><div class="stat-checks">`;
     if (props.amarilla !== undefined) html += `<label><input type="checkbox" class="statCheck" data-player="${playerName}" data-market="amarilla">Amarilla</label>`;
     if (props.roja !== undefined) html += `<label><input type="checkbox" class="statCheck" data-player="${playerName}" data-market="roja">Roja</label>`;
-    html += `</div><label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--chalk-dim);margin-top:8px;"><input type="checkbox" class="statDidNotPlay" data-player="${playerName}">No jugó este partido</label></div>`;
+    html += `</div><label class="dnp-row"><input type="checkbox" class="statDidNotPlay" data-player="${playerName}">No jugó este partido</label></div>`;
   }
   container.innerHTML = html;
 }
@@ -535,7 +596,7 @@ function renderAdmin() {
     ? STATE.teams.slice().sort((a, b) => b.rating - a.rating).map((t) =>
         `<div class="team-line"><span class="crest">${initials(t.name)}</span><span class="name">${t.name}</span><span class="rating">${t.rating}</span></div>`
       ).join('')
-    : '<div class="empty" style="padding:16px;">Agregá al menos dos equipos.</div>';
+    : `<div class="empty" style="padding:20px;">Agregá al menos dos equipos.</div>`;
 
   const homeSel = document.getElementById('matchHome');
   const awaySel = document.getElementById('matchAway');
@@ -604,7 +665,6 @@ function connectSocket() {
       TOKEN = null;
       localStorage.removeItem('lb_token');
       localStorage.removeItem('lb_name');
-      document.getElementById('nameInput').value = name;
       showGate();
     }
   } else {
