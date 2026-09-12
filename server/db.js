@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
 const { computeOdds } = require('./oddsEngine');
 const { SEED_TEAMS, SEED_FIXTURE, seedRating } = require('./lealProps');
+const { STARTING_CHIPS } = require('./constants');
 
 if (!process.env.DATABASE_URL) {
   console.error('Falta la variable de entorno DATABASE_URL (connection string de Postgres).');
@@ -106,4 +107,17 @@ async function seedIfEmpty() {
   }
 }
 
-module.exports = { pool, uid, initSchema, seedIfEmpty };
+// Suma (o resta) `delta` al saldo del usuario y, si con eso queda en 0 o
+// menos, lo restablece a las fichas iniciales para que pueda seguir
+// jugando (debe llamarse dentro de una transacción, con el cliente de esa
+// transacción). Devuelve true si hubo restablecimiento.
+async function applyBalanceDelta(client, userName, delta) {
+  await client.query('UPDATE users SET balance = balance + $1 WHERE name=$2', [delta, userName]);
+  const { rows } = await client.query(
+    'UPDATE users SET balance=$1 WHERE name=$2 AND balance <= 0 RETURNING balance',
+    [STARTING_CHIPS, userName]
+  );
+  return rows.length > 0;
+}
+
+module.exports = { pool, uid, initSchema, seedIfEmpty, applyBalanceDelta };

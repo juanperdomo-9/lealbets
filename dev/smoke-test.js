@@ -136,6 +136,16 @@ async function api(path, { method = 'GET', body, token } = {}) {
   r = await api('/state');
   assert(r.data.ranking.some((u) => u.name === 'Juan Smoke'), 'el ranking incluye al usuario de prueba');
 
+  // 12. si alguien apuesta TODAS sus fichas y las pierde (o queda en 0), se le restablecen solas
+  r = await api('/auth/join', { method: 'POST', body: { name: 'Sin Suerte', password: 'abcd' } });
+  const brokeToken = r.data.token;
+  r = await api('/state');
+  const anyMatch = r.data.matches.find((m) => m.status === 'upcoming');
+  r = await api('/bets', { method: 'POST', token: brokeToken, body: { stake: 30000, legs: [{ matchId: anyMatch.id, pick: 'home' }] } });
+  assert(r.status === 200 && r.data.wasReset === true, 'apostar todas las fichas dispara el auto-reset (wasReset=true)');
+  r = await api('/auth/me', { token: brokeToken });
+  assert(r.data.balance === 30000, `el saldo quedó restablecido a 30000 en vez de 0 (real ${r.data.balance})`);
+
   console.log('\n' + (failures === 0 ? `TODO OK (0 fallos)` : `${failures} FALLO(S)`));
   process.exit(failures === 0 ? 0 : 1);
 })().catch((e) => {

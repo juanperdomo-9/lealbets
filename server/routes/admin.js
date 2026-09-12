@@ -1,5 +1,5 @@
 const express = require('express');
-const { pool, uid } = require('../db');
+const { pool, uid, applyBalanceDelta } = require('../db');
 const { requireAdmin } = require('../auth');
 const { computeOdds, updateElo, evaluateBet, parsePropPick } = require('../oddsEngine');
 const { syncLealProps } = require('../state');
@@ -150,14 +150,11 @@ router.post('/matches/:id/result', async (req, res) => {
           // se anularon todas las patas: se devuelve el monto apostado
           won = null;
           voided = true;
-          await client.query('UPDATE users SET balance = balance + $1 WHERE name=$2', [bet.stake, bet.user_name]);
+          await applyBalanceDelta(client, bet.user_name, Number(bet.stake));
         } else {
           won = true;
           effectiveOdds = Math.round(activeLegs.reduce((p, l) => p * Number(l.oddsAtBet), 1) * 100) / 100;
-          await client.query('UPDATE users SET balance = balance + $1 WHERE name=$2', [
-            Number(bet.stake) * effectiveOdds,
-            bet.user_name,
-          ]);
+          await applyBalanceDelta(client, bet.user_name, Number(bet.stake) * effectiveOdds);
         }
       }
       await client.query('UPDATE bets SET legs=$1, settled=$2, won=$3, voided=$4, effective_odds=$5 WHERE id=$6', [
@@ -201,13 +198,10 @@ router.post('/matches/:id/reopen', async (req, res) => {
       if (touchedLegs.length === 0) continue;
       if (bet.settled) {
         if (bet.voided) {
-          await client.query('UPDATE users SET balance = balance - $1 WHERE name=$2', [bet.stake, bet.user_name]);
+          await applyBalanceDelta(client, bet.user_name, -Number(bet.stake));
         } else if (bet.won) {
           const paidOdds = bet.effective_odds || bet.combined_odds;
-          await client.query('UPDATE users SET balance = balance - $1 WHERE name=$2', [
-            Number(bet.stake) * Number(paidOdds),
-            bet.user_name,
-          ]);
+          await applyBalanceDelta(client, bet.user_name, -Number(bet.stake) * Number(paidOdds));
         }
       }
       touchedLegs.forEach((l) => (l.result = null));

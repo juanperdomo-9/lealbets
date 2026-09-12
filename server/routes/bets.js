@@ -1,5 +1,5 @@
 const express = require('express');
-const { pool, uid } = require('../db');
+const { pool, uid, applyBalanceDelta } = require('../db');
 const { requireAuth } = require('../auth');
 const { oddsFor } = require('../oddsEngine');
 const { broadcastStateUpdate } = require('../realtime');
@@ -73,11 +73,11 @@ router.post('/', requireAuth, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,FALSE,FALSE,FALSE,FALSE,$6)`,
       [id, req.userName, stake, combinedOdds, JSON.stringify(legs), placedAt]
     );
-    await client.query('UPDATE users SET balance = balance - $1 WHERE name=$2', [stake, req.userName]);
+    const wasReset = await applyBalanceDelta(client, req.userName, -stake);
     await client.query('COMMIT');
 
     broadcastStateUpdate();
-    res.json({ id, user: req.userName, stake, combinedOdds, legs, settled: false, won: false, voided: false, cancelled: false, placedAt });
+    res.json({ id, user: req.userName, stake, combinedOdds, legs, settled: false, won: false, voided: false, cancelled: false, placedAt, wasReset });
   } catch (e) {
     await client.query('ROLLBACK');
     if (e.status) return res.status(e.status).json({ error: e.message });
@@ -102,7 +102,7 @@ router.post('/:id/cashout', requireAuth, async (req, res) => {
       throw Object.assign(new Error('Esa apuesta ya no se puede cerrar'), { status: 400 });
     }
     await client.query('UPDATE bets SET cancelled=TRUE WHERE id=$1', [bet.id]);
-    await client.query('UPDATE users SET balance = balance + $1 WHERE name=$2', [bet.stake, req.userName]);
+    await applyBalanceDelta(client, req.userName, Number(bet.stake));
     await client.query('COMMIT');
     broadcastStateUpdate();
     res.json({ ok: true });

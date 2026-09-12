@@ -3,9 +3,9 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { pool } = require('../db');
 const { signUserToken, signAdminToken, requireAuth, ADMIN_PASSWORD } = require('../auth');
+const { STARTING_CHIPS } = require('../constants');
 
 const router = express.Router();
-const STARTING_CHIPS = 30000;
 
 function safeEqual(a, b) {
   const bufA = Buffer.from(String(a));

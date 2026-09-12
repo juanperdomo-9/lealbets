@@ -289,14 +289,16 @@ async function confirmCombo() {
   if (!stake || stake <= 0) { toast('Poné un monto válido'); return; }
   try {
     const legs = CART.map((l) => ({ matchId: l.matchId, pick: l.pick }));
-    await apiFetch('/bets', { method: 'POST', body: { legs, stake } });
+    const result = await apiFetch('/bets', { method: 'POST', body: { legs, stake } });
     const wasCombo = CART.length > 1;
     CART = [];
     cartPanelOpen = false;
     await loadState();
     await loadMyBets();
     renderAll();
-    toast(wasCombo ? 'Combinada confirmada' : 'Apuesta confirmada');
+    toast(result.wasReset
+      ? 'Te quedaste sin fichas — se te recargó la cuenta'
+      : (wasCombo ? 'Combinada confirmada' : 'Apuesta confirmada'));
   } catch (e) { toast(e.message); }
 }
 async function cashOutBet(betId) {
