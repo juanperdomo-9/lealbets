@@ -370,6 +370,7 @@ function updateComboPreview() {
 }
 function applyBoostToCart(boostId) {
   if (!ME) { toast('Entrá con tu usuario para apostar'); return; }
+  if (MY_BETS.some((bet) => bet.superBoostId === boostId)) { toast('Ya usaste este superaumento'); return; }
   const boost = (STATE.superBoosts || []).find((b) => b.id === boostId);
   if (!boost) { toast('Ese superaumento ya no está disponible'); return; }
   CART = boost.legs.map((l) => ({
@@ -461,7 +462,13 @@ function renderSuperBoosts() {
   const boosts = STATE.superBoosts || [];
   if (boosts.length === 0) { bar.innerHTML = ''; return; }
   const maxBoostStake = STATE.maxSuperBoostStake || 10000;
-  bar.innerHTML = boosts.map((b) => `
+  bar.innerHTML = boosts.map((b) => {
+    // cada superaumento se puede usar una sola vez por jugador
+    const alreadyUsed = ME && MY_BETS.some((bet) => bet.superBoostId === b.id);
+    const cta = alreadyUsed
+      ? `<button class="boost-cta boost-cta-used" disabled>${icon('check', 14)}Ya usaste este superaumento</button>`
+      : `<button class="boost-cta" onclick="applyBoostToCart('${b.id}')">${icon('check', 14)}Agregar esta combinada</button>`;
+    return `
     <div class="ticket boost-ticket">
       <div class="ticket-body">
         <div class="ticket-meta">
@@ -475,11 +482,12 @@ function renderSuperBoosts() {
         </div>
         <div class="boost-legs">${b.legs.map((l) => `<div class="boost-leg">${icon('check', 12)}${l.label}</div>`).join('')}</div>
         <div class="boost-odds-row"><span class="old">${b.naturalOdds}</span>${icon('login', 14)}<span class="new">${b.boostedOdds}</span></div>
-        <div class="boost-cap">Máximo ${maxBoostStake} fichas con esta cuota especial</div>
-        <button class="boost-cta" onclick="applyBoostToCart('${b.id}')">${icon('check', 14)}Agregar esta combinada</button>
+        <div class="boost-cap">Máximo ${maxBoostStake} fichas con esta cuota especial · una vez por jugador</div>
+        ${cta}
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function renderPlayerPropsBlock(m) {

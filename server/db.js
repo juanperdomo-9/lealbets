@@ -122,17 +122,29 @@ async function seedIfEmpty() {
   }
 }
 
-// Suma (o resta) `delta` al saldo del usuario y, si con eso queda en 0 o
-// menos, lo restablece a las fichas iniciales para que pueda seguir
-// jugando (debe llamarse dentro de una transacción, con el cliente de esa
-// transacción). Devuelve true si hubo restablecimiento.
+// Suma (o resta) `delta` al saldo del usuario (debe llamarse dentro de una
+// transacción, con el cliente de esa transacción). No restablece fichas acá:
+// eso se decide aparte con resetIfDepletedAndNoPendingBets, para no devolver
+// fichas mientras todavía tiene una combinada pendiente que podría salvarlo.
 async function applyBalanceDelta(client, userName, delta) {
   await client.query('UPDATE users SET balance = balance + $1 WHERE name=$2', [delta, userName]);
+}
+
+// Si el usuario quedó con 0 fichas o menos Y no le queda ninguna apuesta
+// pendiente (todas sus combinadas ya se resolvieron, perdidas o no), recién
+// ahí se le restablecen las fichas iniciales para que pueda seguir jugando.
+// Llamar siempre DESPUÉS de dejar reflejado en la tabla bets el resultado de
+// la apuesta que se acaba de resolver (si no, esa apuesta todavía cuenta como
+// "pendiente" y no se restablece nada). Devuelve true si hubo restablecimiento.
+async function resetIfDepletedAndNoPendingBets(client, userName) {
   const { rows } = await client.query(
-    'UPDATE users SET balance=$1 WHERE name=$2 AND balance <= 0 RETURNING balance',
+    `UPDATE users SET balance=$1
+     WHERE name=$2 AND balance <= 0
+       AND NOT EXISTS (SELECT 1 FROM bets WHERE user_name=$2 AND settled=FALSE AND cancelled=FALSE)
+     RETURNING balance`,
     [STARTING_CHIPS, userName]
   );
   return rows.length > 0;
 }
 
-module.exports = { pool, uid, initSchema, seedIfEmpty, applyBalanceDelta };
+module.exports = { pool, uid, initSchema, seedIfEmpty, applyBalanceDelta, resetIfDepletedAndNoPendingBets };

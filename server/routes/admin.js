@@ -1,5 +1,5 @@
 const express = require('express');
-const { pool, uid, applyBalanceDelta } = require('../db');
+const { pool, uid, applyBalanceDelta, resetIfDepletedAndNoPendingBets } = require('../db');
 const { requireAdmin } = require('../auth');
 const { computeOdds, updateElo, evaluateBet, parsePropPick, oddsFor } = require('../oddsEngine');
 const { syncLealProps, rowToMatch } = require('../state');
@@ -220,6 +220,12 @@ router.post('/matches/:id/result', async (req, res) => {
         effectiveOdds,
         bet.id,
       ]);
+      if (settled) {
+        // recién ahora esta apuesta deja de contar como "pendiente": si el usuario
+        // quedó en 0 fichas y esta era su última combinada en juego, se le
+        // restablecen acá (nunca antes, mientras todavía tenía algo pendiente).
+        await resetIfDepletedAndNoPendingBets(client, bet.user_name);
+      }
     }
 
     await syncLealProps(client);

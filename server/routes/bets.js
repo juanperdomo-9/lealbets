@@ -1,5 +1,5 @@
 const express = require('express');
-const { pool, uid, applyBalanceDelta } = require('../db');
+const { pool, uid, applyBalanceDelta, resetIfDepletedAndNoPendingBets } = require('../db');
 const { requireAuth } = require('../auth');
 const { oddsFor } = require('../oddsEngine');
 const { MAX_SUPERBOOST_STAKE } = require('../constants');
@@ -86,6 +86,13 @@ router.post('/', requireAuth, async (req, res) => {
         const sameSize = submitted.size === boostSet.size;
         const allMatch = sameSize && [...boostSet].every((k) => submitted.has(k));
         if (allMatch) {
+          const { rows: usedRows } = await client.query(
+            'SELECT 1 FROM bets WHERE user_name=$1 AND super_boost_id=$2 LIMIT 1',
+            [req.userName, boost.id]
+          );
+          if (usedRows.length > 0) {
+            throw Object.assign(new Error('Ya usaste este superaumento'), { status: 400 });
+          }
           if (stake > MAX_SUPERBOOST_STAKE) {
             throw Object.assign(new Error(`El superaumento tiene un tope de ${MAX_SUPERBOOST_STAKE} fichas`), { status: 400 });
           }
@@ -102,7 +109,11 @@ router.post('/', requireAuth, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,FALSE,FALSE,FALSE,FALSE,$6,$7)`,
       [id, req.userName, stake, combinedOdds, JSON.stringify(legs), superBoostId, placedAt]
     );
-    const wasReset = await applyBalanceDelta(client, req.userName, -stake);
+    await applyBalanceDelta(client, req.userName, -stake);
+    // esta apuesta recién insertada ya cuenta como pendiente, así que esto no
+    // restablece nada todavía aunque el saldo haya quedado en 0: se espera a
+    // que la combinada se resuelva (ver liquidación en admin.js).
+    const wasReset = await resetIfDepletedAndNoPendingBets(client, req.userName);
     await client.query('COMMIT');
 
     broadcastStateUpdate();
@@ -135,6 +146,7 @@ router.post('/:id/cashout', requireAuth, async (req, res) => {
     }
     await client.query('UPDATE bets SET cancelled=TRUE WHERE id=$1', [bet.id]);
     await applyBalanceDelta(client, req.userName, Number(bet.stake));
+    await resetIfDepletedAndNoPendingBets(client, req.userName);
     await client.query('COMMIT');
     broadcastStateUpdate();
     res.json({ ok: true });

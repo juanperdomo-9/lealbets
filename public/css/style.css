@@ -444,6 +444,11 @@ section.active{display:block;animation:fadeIn .25s ease;}
   transition:transform .15s ease;
 }
 .boost-cta:hover{transform:translateY(-1px);}
+.boost-cta:disabled, .boost-cta-used{
+  background:rgba(255,255,255,0.18); color:rgba(255,255,255,0.75);
+  cursor:default; box-shadow:none;
+}
+.boost-cta:disabled:hover{transform:none;}
 .cart-summary.boosted{border-top-color:#e8264a;}
 .cart-summary.boosted .badge{background:linear-gradient(160deg,#ff8a4c,#e8264a);color:#fff;}
 .cart-summary.boosted .badge{background:linear-gradient(160deg,var(--gold),var(--gold-2));}
