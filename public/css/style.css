@@ -1,0 +1,272 @@
+:root{
+  --pitch: #0F3D2E;
+  --pitch-deep: #0A2C21;
+  --pitch-light: #1B5E42;
+  --line: rgba(242,239,230,0.18);
+  --chalk: #F2EFE6;
+  --chalk-dim: #C9C4B4;
+  --gold: #E3B23C;
+  --gold-dim: #A9822B;
+  --ink: #14201B;
+  --red: #C1443B;
+  --green-win: #4C9A6A;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:var(--pitch-deep);
+  color:var(--chalk);
+  font-family:'Work Sans', sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:640px;margin:0 auto;padding:0 0 100px;}
+
+header.board{
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 2px, transparent 2px 40px),
+    linear-gradient(180deg, var(--pitch) 0%, var(--pitch-deep) 100%);
+  border-bottom:3px solid var(--gold);
+  padding:20px 20px 18px;
+}
+.board-top{display:flex;justify-content:space-between;align-items:center;gap:12px;}
+.board-id{display:flex;align-items:center;gap:12px;}
+.tourney-shield{
+  width:42px;height:42px;flex:none;
+  clip-path:polygon(50% 0%,100% 20%,100% 68%,50% 100%,0% 68%,0% 20%);
+  background:linear-gradient(160deg, var(--pitch-light), var(--pitch));
+  border:1px solid var(--gold-dim);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Oswald', sans-serif;font-weight:700;font-size:13px;color:var(--gold);
+}
+h1{
+  font-family:'Oswald', sans-serif;
+  font-weight:600;
+  font-size:20px;
+  letter-spacing:0.2px;
+  margin:0;
+  color:var(--chalk);
+}
+.subtitle{color:var(--chalk-dim);font-size:12px;margin-top:3px;}
+.player-box{
+  text-align:right;
+  font-family:'Oswald', sans-serif;
+}
+.player-name{font-size:14px;color:var(--chalk-dim);}
+.chip-count{font-size:24px;color:var(--gold);font-weight:600;line-height:1.1;}
+.chip-count span{font-size:13px;color:var(--chalk-dim);font-family:'Work Sans',sans-serif;font-weight:400;}
+.switch-player{
+  background:none;border:none;color:var(--chalk-dim);
+  font-size:11px;text-decoration:underline;cursor:pointer;padding:4px 0 0;
+  font-family:'Work Sans',sans-serif;
+}
+
+nav.tabs{
+  display:flex;
+  border-bottom:1px solid var(--line);
+  background:var(--pitch);
+  position:sticky;top:0;z-index:5;
+}
+nav.tabs button{
+  flex:1;
+  background:none;border:none;
+  color:var(--chalk-dim);
+  font-family:'Oswald', sans-serif;
+  font-size:13px;
+  letter-spacing:0.3px;
+  padding:13px 4px;
+  cursor:pointer;
+  border-bottom:3px solid transparent;
+}
+nav.tabs button.active{color:var(--chalk);border-bottom-color:var(--gold);}
+
+main{padding:18px 16px 0;}
+section{display:none;}
+section.active{display:block;}
+
+.empty{
+  text-align:center;color:var(--chalk-dim);
+  font-size:14px;padding:40px 20px;
+  border:1px dashed var(--line);
+  margin-top:10px;
+}
+
+/* --- Match ticket --- */
+.ticket{
+  border:1px solid var(--line);
+  border-top:2px solid var(--gold-dim);
+  background:var(--pitch);
+  margin-bottom:14px;
+  padding:16px 14px;
+}
+.ticket-meta{
+  display:flex;justify-content:space-between;
+  font-size:11px;color:var(--chalk-dim);
+  margin-bottom:12px;
+}
+.ticket-teams{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  margin-bottom:6px;
+}
+.team-chip{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;min-width:0;}
+.team-chip span.name{
+  font-family:'Oswald', sans-serif;font-size:14px;color:var(--chalk);
+  text-align:center;line-height:1.2;
+}
+.crest{
+  width:36px;height:36px;border-radius:50%;flex:none;
+  background:var(--pitch-light);border:1px solid var(--gold-dim);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Oswald', sans-serif;font-size:12px;color:var(--gold);
+}
+.ticket-teams .vs{font-size:11px;color:var(--chalk-dim);font-family:'Work Sans',sans-serif;flex:none;padding:0 4px;}
+.expand-hint{text-align:center;font-size:12px;color:var(--gold-dim);cursor:pointer;padding:2px 0 8px;}
+.market-label{font-size:11px;color:var(--gold-dim);margin:14px 0 7px;}
+.market-label:first-of-type{margin-top:0;}
+.player-props{border-top:1px dashed var(--line);padding-top:10px;margin-top:10px;}
+.player-props-name{font-family:'Oswald',sans-serif;font-size:13px;color:var(--chalk);margin-bottom:6px;}
+.prop-sublabel{font-size:10.5px;color:var(--chalk-dim);margin:6px 0 4px;}
+.odds-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.odds-btn{
+  background:var(--pitch-deep);
+  border:1px solid var(--line);
+  color:var(--chalk);
+  padding:10px 4px 8px;
+  text-align:center;
+  cursor:pointer;
+  font-family:'Work Sans', sans-serif;
+  transition:border-color 0.15s, transform 0.1s;
+}
+.odds-btn:hover{border-color:var(--gold-dim);}
+.odds-btn:active{transform:scale(0.97);}
+.odds-btn.selected{border-color:var(--gold);background:var(--pitch-light);}
+.odds-btn .lbl{display:block;font-size:11px;color:var(--chalk-dim);margin-bottom:4px;}
+.odds-btn .val{display:block;font-family:'Oswald',sans-serif;font-size:19px;color:var(--gold);}
+.ticket-result{
+  text-align:center;font-family:'Oswald',sans-serif;font-size:22px;
+  margin-bottom:6px;letter-spacing:1px;
+}
+.ticket-status{text-align:center;font-size:12px;color:var(--chalk-dim);}
+
+/* --- Bet slip (inline expand) --- */
+.slip{
+  margin-top:12px;border-top:1px dashed var(--line);padding-top:12px;
+}
+.slip label{font-size:12px;color:var(--chalk-dim);display:block;margin-bottom:6px;}
+.slip-row{display:flex;gap:8px;align-items:center;}
+.slip input[type=number]{
+  flex:1;background:var(--pitch-deep);border:1px solid var(--line);
+  color:var(--chalk);padding:9px 10px;font-size:15px;font-family:'Work Sans',sans-serif;
+}
+.slip button.confirm{
+  background:var(--gold);color:var(--ink);border:none;
+  padding:9px 16px;font-family:'Oswald',sans-serif;font-weight:600;
+  letter-spacing:0.3px;cursor:pointer;
+}
+.slip .payout{font-size:12px;color:var(--chalk-dim);margin-top:6px;}
+.slip .cancel{background:none;border:none;color:var(--chalk-dim);font-size:12px;text-decoration:underline;cursor:pointer;margin-top:8px;padding:0;}
+
+/* --- Bets list --- */
+.bet-row{
+  display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--line);padding:12px 2px;font-size:14px;
+}
+.bet-row .desc{color:var(--chalk);}
+.bet-row .desc small{display:block;color:var(--chalk-dim);font-size:11px;margin-top:2px;}
+.bet-tag{font-family:'Oswald',sans-serif;font-size:14px;padding:2px 8px;border:1px solid var(--line);}
+.bet-tag.pending{color:var(--chalk-dim);}
+.bet-tag.win{color:var(--green-win);border-color:var(--green-win);}
+.bet-tag.lose{color:var(--red);border-color:var(--red);}
+
+/* --- Ranking --- */
+table.ranking{width:100%;border-collapse:collapse;font-size:14px;}
+table.ranking th{
+  text-align:left;font-family:'Oswald',sans-serif;font-weight:500;
+  color:var(--chalk-dim);font-size:11px;border-bottom:1px solid var(--line);padding:6px 4px;
+}
+table.ranking td{padding:12px 4px;border-bottom:1px solid var(--line);}
+table.ranking td.pos{font-family:'Oswald',sans-serif;color:var(--chalk-dim);width:26px;}
+table.ranking tr:nth-child(1) td.pos{color:var(--gold);}
+table.ranking tr:nth-child(2) td.pos{color:var(--chalk);}
+table.ranking tr:nth-child(3) td.pos{color:var(--gold-dim);}
+table.ranking td.bal{text-align:right;font-family:'Oswald',sans-serif;}
+
+/* --- Admin --- */
+.card{border:1px solid var(--line);background:var(--pitch);padding:16px;margin-bottom:16px;}
+.card h3{font-family:'Oswald',sans-serif;font-weight:500;font-size:14px;margin:0 0 12px;color:var(--gold);letter-spacing:0.3px;}
+.card label{display:block;font-size:12px;color:var(--chalk-dim);margin-bottom:5px;}
+.card select, .card input{
+  width:100%;background:var(--pitch-deep);border:1px solid var(--line);
+  color:var(--chalk);padding:9px 10px;font-size:14px;margin-bottom:10px;font-family:'Work Sans',sans-serif;
+}
+.card button{
+  background:var(--gold);color:var(--ink);border:none;
+  padding:10px 16px;font-family:'Oswald',sans-serif;font-weight:600;
+  letter-spacing:0.3px;cursor:pointer;width:100%;
+}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.team-line{display:flex;align-items:center;gap:10px;font-size:13px;padding:8px 0;border-bottom:1px solid var(--line);}
+.team-line .crest{width:26px;height:26px;font-size:10px;}
+.team-line .name{flex:1;}
+.team-line .rating{color:var(--chalk-dim);font-family:'Oswald',sans-serif;}
+.result-inline{display:flex;gap:8px;margin-top:8px;align-items:center;}
+.result-inline input{margin-bottom:0;text-align:center;}
+.result-inline .dash{color:var(--chalk-dim);font-family:'Oswald',sans-serif;font-size:18px;}
+.stat-player{border-top:1px dashed var(--line);padding-top:10px;margin-top:12px;}
+.stat-player-name{font-family:'Oswald',sans-serif;font-size:13px;color:var(--gold);margin-bottom:8px;}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.stat-grid label{font-size:11px;margin-bottom:3px;}
+.stat-grid input{margin-bottom:0;}
+.stat-checks{display:flex;gap:16px;margin-top:8px;}
+.stat-checks label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--chalk-dim);margin-bottom:0;}
+.stat-checks input{width:auto;margin:0;}
+.toast{
+  position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  background:var(--gold);color:var(--ink);padding:10px 18px;
+  font-family:'Oswald',sans-serif;font-weight:600;font-size:13px;
+  opacity:0;pointer-events:none;transition:opacity 0.25s;z-index:20;
+}
+.toast.show{opacity:1;}
+
+/* --- Combinada (carrito de selecciones) --- */
+#cartBar{position:fixed;left:0;right:0;bottom:0;z-index:15;max-width:640px;margin:0 auto;}
+.cart-summary{
+  background:var(--pitch-deep);border-top:2px solid var(--gold);
+  padding:12px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;
+}
+.cart-summary .info{font-family:'Oswald',sans-serif;font-size:14px;color:var(--chalk);}
+.cart-summary .info small{display:block;font-size:11px;color:var(--chalk-dim);font-family:'Work Sans',sans-serif;margin-top:2px;}
+.cart-summary .toggle{font-family:'Oswald',sans-serif;color:var(--gold);font-size:13px;}
+.cart-panel{background:var(--pitch);border-top:1px solid var(--line);max-height:55vh;overflow-y:auto;padding:12px 16px 16px;}
+.cart-leg{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;}
+.cart-leg small{display:block;color:var(--chalk-dim);font-size:11px;margin-top:2px;}
+.cart-leg .remove{background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding:0 4px;line-height:1;}
+
+/* --- Name gate --- */
+.gate{
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:30px;text-align:center;
+}
+.gate h1{font-size:28px;margin-bottom:8px;}
+.gate p{color:var(--chalk-dim);font-size:14px;max-width:280px;margin-bottom:24px;}
+.gate input{
+  width:100%;max-width:260px;background:var(--pitch);border:1px solid var(--line);
+  color:var(--chalk);padding:12px 14px;font-size:16px;text-align:center;margin-bottom:14px;
+  font-family:'Work Sans',sans-serif;
+}
+.gate button{
+  background:var(--gold);color:var(--ink);border:none;
+  padding:12px 30px;font-family:'Oswald',sans-serif;font-weight:600;font-size:15px;
+  letter-spacing:0.3px;cursor:pointer;
+}
+.gate-shield{
+  width:76px;height:76px;margin-bottom:18px;
+  clip-path:polygon(50% 0%,100% 20%,100% 68%,50% 100%,0% 68%,0% 20%);
+  background:linear-gradient(160deg, var(--pitch-light), var(--pitch));
+  border:1px solid var(--gold-dim);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Oswald', sans-serif;font-weight:700;font-size:22px;color:var(--gold);
+}
+.error-banner{
+  background:rgba(193,68,59,0.15);border:1px solid var(--red);color:var(--chalk);
+  padding:10px 14px;font-size:13px;margin-bottom:14px;text-align:center;
+}

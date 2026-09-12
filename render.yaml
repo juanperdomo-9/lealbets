@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: leal-bets
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false # pegar acá el connection string de Neon (ver README)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        sync: false # elegir una contraseña de administrador propia
+      - key: NODE_VERSION
+        value: 20
