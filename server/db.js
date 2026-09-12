@@ -77,6 +77,12 @@ CREATE TABLE IF NOT EXISTS super_boosts (
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at BIGINT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS blackjack_games (
+  user_name TEXT PRIMARY KEY REFERENCES users(name),
+  state JSONB NOT NULL,
+  updated_at BIGINT NOT NULL
+);
 `;
 
 // Migraciones chiquitas y seguras para bases ya desplegadas (no tocan datos existentes).

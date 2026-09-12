@@ -13,6 +13,7 @@ const authRoutes = require('./routes/auth');
 const stateRoutes = require('./routes/state');
 const betsRoutes = require('./routes/bets');
 const adminRoutes = require('./routes/admin');
+const blackjackRoutes = require('./routes/blackjack');
 
 const PORT = process.env.PORT || 3000;
 
@@ -29,6 +30,7 @@ async function main() {
   app.use('/api/state', stateRoutes);
   app.use('/api/bets', betsRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/blackjack', blackjackRoutes);
 
   app.get('/healthz', (req, res) => res.json({ ok: true }));
 

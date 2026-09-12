@@ -51,7 +51,8 @@
 
   <nav class="tabs">
     <button data-tab="matches" class="active">Partidos</button>
-    <button data-tab="mybets">Mis apuestas</button>
+    <button data-tab="mybets">Apuestas</button>
+    <button data-tab="blackjack">Blackjack</button>
     <button data-tab="ranking">Tabla</button>
     <button data-tab="admin">Equipos</button>
   </nav>
@@ -73,6 +74,37 @@
         <button data-view="resolved" onclick="setMyBetsView('resolved')">Apuestas resueltas</button>
       </div>
       <div id="myBetsList"></div>
+    </section>
+
+    <section id="tab-blackjack">
+      <div class="card">
+        <h3>Blackjack contra la casa</h3>
+        <label>Fichas a apostar (mano principal)</label>
+        <input id="bjStakeInput" type="number" min="1" placeholder="Ej: 1000">
+        <div class="row2">
+          <div>
+            <label>Pares (izquierda)</label>
+            <input id="bjPairsStakeInput" type="number" min="0" placeholder="0">
+          </div>
+          <div>
+            <label>21+3 (derecha)</label>
+            <input id="bj21plus3StakeInput" type="number" min="0" placeholder="0">
+          </div>
+        </div>
+        <button id="bjDealBtn" onclick="bjDeal()">Repartir</button>
+      </div>
+      <div id="blackjackTable" class="bj-table"></div>
+      <div id="bjActions" class="bj-actions" style="display:none;">
+        <button onclick="bjHit()">Pedir carta</button>
+        <button onclick="bjStand()">Plantarse</button>
+        <button id="bjDoubleBtn" class="bj-secondary" onclick="bjDouble()" style="display:none;">Doblar</button>
+        <button id="bjSplitBtn" class="bj-secondary" onclick="bjSplit()" style="display:none;">Dividir</button>
+      </div>
+      <div class="card bj-help">
+        <h3>Pagos de las side bets</h3>
+        <div class="bj-pay-row"><b>Pares</b><span>Simple x7 · Color x13 · Perfecto x26</span></div>
+        <div class="bj-pay-row"><b>21+3</b><span>Color x6 · Escalera x11 · Trío x30 · Escalera perfecta x40 · Trío perfecto x101</span></div>
+      </div>
     </section>
 
     <section id="tab-ranking">

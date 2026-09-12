@@ -491,6 +491,41 @@ section.active{display:block;animation:fadeIn .25s ease;}
 }
 .boost-cart-hint .icon{flex:none;}
 
+/* ---------------------------------- blackjack ---------------------------------- */
+.bj-table{
+  background:radial-gradient(ellipse at top, var(--surface-2), var(--bg) 75%);
+  border:1px solid var(--border-soft); border-radius:var(--radius-lg);
+  padding:18px 14px; margin-bottom:14px; min-height:120px;
+}
+.card-hand{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:8px 0 18px;min-height:74px;}
+.playing-card{
+  width:46px;height:64px;background:linear-gradient(160deg,#fff,#e9e4d3);color:var(--ink);border-radius:7px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-size:16px;font-weight:700;
+  box-shadow:0 4px 10px rgba(0,0,0,.3);
+  animation:cardIn .25s ease;
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(-10px) scale(.9);}to{opacity:1;transform:none;}}
+.playing-card.red{color:var(--red);}
+.playing-card.hidden{
+  background:repeating-linear-gradient(45deg, var(--pitch-light,#1b5e42), var(--surface-hover) 6px, var(--surface-2) 6px, var(--surface-2) 12px);
+  border:1px solid var(--gold-2);
+}
+.bj-total{text-align:center;font-size:12px;color:var(--chalk-dim);margin-bottom:2px;font-weight:600;}
+.bj-total.active{color:var(--gold);}
+.bj-total.dim{color:var(--chalk-faint);font-weight:400;font-size:11.5px;}
+.bj-result{text-align:center;font-family:var(--font-display);color:var(--gold);margin-top:8px;font-size:15px;font-weight:700;}
+.bj-actions{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap;}
+.bj-actions button{
+  flex:1 1 40%;background:linear-gradient(160deg, var(--gold), var(--gold-2));color:var(--ink);border:none;
+  padding:12px;font-family:var(--font-display);font-weight:700;font-size:13px;border-radius:var(--radius-sm);
+  cursor:pointer;box-shadow:var(--shadow-gold);
+}
+.bj-actions button.bj-secondary{background:var(--surface-2);color:var(--chalk);box-shadow:none;border:1px solid var(--border);}
+.bj-help .bj-pay-row{display:flex;flex-direction:column;gap:3px;padding:9px 0;border-bottom:1px solid var(--border-soft);font-size:12px;color:var(--chalk-dim);}
+.bj-help .bj-pay-row:last-child{border-bottom:none;}
+.bj-help .bj-pay-row b{color:var(--gold);font-family:var(--font-display);font-size:12.5px;}
+
 /* ---------------------------------- admin ---------------------------------- */
 .card{
   border:1px solid var(--border-soft);background:var(--surface);

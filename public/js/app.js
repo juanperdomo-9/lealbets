@@ -236,6 +236,7 @@ document.querySelectorAll('nav.tabs button').forEach((btn) => {
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'admin' && isAdmin) renderAdmin();
+    if (btn.dataset.tab === 'blackjack') bjLoadState();
   });
 });
 
@@ -1055,6 +1056,174 @@ function connectSocket() {
   setInterval(() => refreshFromServer(true), 20000);
 }
 
+// ---------- blackjack ----------
+// Juego individual: el servidor decide siempre el mazo, el reparto y el
+// resultado (nunca el cliente) — acá solo se piden acciones y se anima lo
+// que el servidor ya resolvió.
+let BJ = { phase: 'none', hands: [], currentHandIndex: 0, dealerHand: [], dealerHidden: true, sideResultText: '', resultText: '' };
+let bjDealingAnim = false;
+
+function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+function bjCardValue(card) {
+  if (card.r === 'A') return 11;
+  if (card.r === 'J' || card.r === 'Q' || card.r === 'K') return 10;
+  return parseInt(card.r, 10);
+}
+function bjHandTotal(cards) {
+  const real = cards.filter(Boolean);
+  let total = real.reduce((s, c) => s + bjCardValue(c), 0);
+  let aces = real.filter((c) => c.r === 'A').length;
+  while (total > 21 && aces > 0) { total -= 10; aces--; }
+  return total;
+}
+function bjCardHtml(card) {
+  if (!card) return `<div class="playing-card hidden"></div>`;
+  const red = card.s === '♥' || card.s === '♦';
+  return `<div class="playing-card${red ? ' red' : ''}">${card.r}${card.s}</div>`;
+}
+function applyBalanceUpdate(newBalance) {
+  const row = STATE.ranking.find((r) => r.name === ME);
+  if (row) row.balance = newBalance;
+  const el = document.getElementById('chipCount');
+  if (el) el.textContent = Math.round(newBalance);
+}
+
+async function bjLoadState() {
+  if (!ME) { renderBlackjack(); return; }
+  try {
+    BJ = await apiFetch('/blackjack/state');
+  } catch (e) { /* ignorar, se reintenta solo */ }
+  renderBlackjack();
+}
+
+async function bjDeal() {
+  if (!ME) { toast('Entrá con tu usuario para jugar'); return; }
+  const stake = parseInt(document.getElementById('bjStakeInput').value, 10);
+  const pairsStake = parseInt(document.getElementById('bjPairsStakeInput').value, 10) || 0;
+  const trioStake = parseInt(document.getElementById('bj21plus3StakeInput').value, 10) || 0;
+  if (!stake || stake <= 0) { toast('Poné un monto válido para la mano principal'); return; }
+  try {
+    const result = await apiFetch('/blackjack/deal', { method: 'POST', body: { stake, pairsStake, trioStake } });
+    applyBalanceUpdate(result.balance);
+    const finalPlayerCards = result.hands[0].cards.slice();
+    const finalDealerCards = result.dealerHand.slice();
+    BJ = {
+      phase: 'playing',
+      hands: [{ cards: [], bet: result.hands[0].bet, status: 'playing', isSplitResult: false, resultMsg: null }],
+      currentHandIndex: 0, dealerHand: [], dealerHidden: true, sideResultText: '', resultText: '',
+    };
+    bjDealingAnim = true;
+    renderBlackjack();
+    // reparto de a una carta, alternando jugador y dealer, como en una mesa real
+    const steps = [
+      () => BJ.hands[0].cards.push(finalPlayerCards[0]),
+      () => BJ.dealerHand.push(finalDealerCards[0]),
+      () => BJ.hands[0].cards.push(finalPlayerCards[1]),
+      () => BJ.dealerHand.push(result.dealerHidden ? null : finalDealerCards[1]),
+    ];
+    for (const step of steps) {
+      await sleep(450);
+      step();
+      renderBlackjack();
+    }
+    bjDealingAnim = false;
+    BJ = result; // estado real y completo (puede venir ya 'done' si hubo blackjack natural)
+    renderBlackjack();
+  } catch (e) { toast(e.message); }
+}
+
+async function bjApplyActionResult(result) {
+  applyBalanceUpdate(result.balance);
+  const wasHidden = BJ.dealerHidden;
+  if (result.phase === 'done' && wasHidden) {
+    // había una carta tapada del dealer: se revela y, si pide más, se anima de a una
+    const priorLen = BJ.dealerHand.length;
+    const fullDealer = result.dealerHand.slice();
+    BJ = { ...BJ, dealerHand: fullDealer.slice(0, priorLen), dealerHidden: false };
+    renderBlackjack();
+    for (let i = priorLen; i < fullDealer.length; i++) {
+      await sleep(600);
+      BJ.dealerHand.push(fullDealer[i]);
+      renderBlackjack();
+    }
+    await sleep(300);
+  }
+  BJ = result;
+  renderBlackjack();
+}
+async function bjHit() {
+  try { await bjApplyActionResult(await apiFetch('/blackjack/hit', { method: 'POST' })); }
+  catch (e) { toast(e.message); }
+}
+async function bjStand() {
+  try { await bjApplyActionResult(await apiFetch('/blackjack/stand', { method: 'POST' })); }
+  catch (e) { toast(e.message); }
+}
+async function bjDouble() {
+  try { await bjApplyActionResult(await apiFetch('/blackjack/double', { method: 'POST' })); }
+  catch (e) { toast(e.message); }
+}
+async function bjSplit() {
+  try { await bjApplyActionResult(await apiFetch('/blackjack/split', { method: 'POST' })); }
+  catch (e) { toast(e.message); }
+}
+
+function renderBlackjack() {
+  const container = document.getElementById('blackjackTable');
+  const actionsBox = document.getElementById('bjActions');
+  const dealBtn = document.getElementById('bjDealBtn');
+  if (!container || !actionsBox || !dealBtn) return;
+
+  const stakeInput = document.getElementById('bjStakeInput');
+  const pairsInput = document.getElementById('bjPairsStakeInput');
+  const trioInput = document.getElementById('bj21plus3StakeInput');
+
+  if (!ME) {
+    container.innerHTML = `<div class="empty">${icon('lock', 26)}Entrá con tu usuario para jugar.</div>`;
+    actionsBox.style.display = 'none';
+    dealBtn.style.display = 'none';
+    stakeInput.disabled = pairsInput.disabled = trioInput.disabled = true;
+    return;
+  }
+
+  let html = '';
+  if (BJ.phase === 'none') {
+    html = `<div class="empty">${icon('ball', 26)}Elegí cuánto apostar y tocá "Repartir".</div>`;
+  } else {
+    const dealerTotalDisplay = BJ.dealerHidden ? '?' : bjHandTotal(BJ.dealerHand);
+    html += `<div class="bj-total">Dealer (${dealerTotalDisplay})</div><div class="card-hand">${BJ.dealerHand.map((c) => bjCardHtml(c)).join('')}</div>`;
+
+    BJ.hands.forEach((hand, i) => {
+      const isActive = BJ.phase === 'playing' && !bjDealingAnim && i === BJ.currentHandIndex;
+      const label = BJ.hands.length > 1 ? `Mano ${i + 1} (${hand.bet} fichas)` : 'Vos';
+      const statusNote = hand.status === 'bust' ? ' — se pasó' : '';
+      html += `<div class="bj-total${isActive ? ' active' : ''}">${label} (${bjHandTotal(hand.cards)})${statusNote}</div><div class="card-hand">${hand.cards.map((c) => bjCardHtml(c)).join('')}</div>`;
+      if (BJ.phase === 'done' && hand.resultMsg) html += `<div class="bj-total dim">${hand.resultMsg}</div>`;
+    });
+
+    if (BJ.sideResultText) html += `<div class="bj-total dim">${BJ.sideResultText}</div>`;
+    if (BJ.phase === 'done' && BJ.hands.length > 1 && BJ.resultText) html += `<div class="bj-result">${BJ.resultText}</div>`;
+  }
+  container.innerHTML = html;
+
+  const inProgress = BJ.phase === 'playing' || bjDealingAnim;
+  dealBtn.style.display = inProgress ? 'none' : 'block';
+  stakeInput.disabled = pairsInput.disabled = trioInput.disabled = inProgress;
+
+  if (BJ.phase === 'playing' && !bjDealingAnim) {
+    actionsBox.style.display = 'flex';
+    const hand = BJ.hands[BJ.currentHandIndex];
+    const balance = myBalance();
+    const canDouble = !!hand && hand.cards.length === 2 && balance >= hand.bet;
+    const canSplit = !!hand && hand.cards.length === 2 && hand.cards[0] && hand.cards[1] && hand.cards[0].r === hand.cards[1].r && balance >= hand.bet;
+    document.getElementById('bjDoubleBtn').style.display = canDouble ? 'inline-flex' : 'none';
+    document.getElementById('bjSplitBtn').style.display = canSplit ? 'inline-flex' : 'none';
+  } else {
+    actionsBox.style.display = 'none';
+  }
+}
+
 // ---------- init ----------
 (async function init() {
   await refreshFromServer(true);
@@ -1069,6 +1238,7 @@ function connectSocket() {
       showApp();
       await loadMyBets();
       renderAll(true);
+      await bjLoadState(); // por si había una mano de blackjack a mitad de jugar
     } catch (e) {
       TOKEN = null;
       localStorage.removeItem('lb_token');
@@ -1078,6 +1248,7 @@ function connectSocket() {
   } else {
     showGate();
   }
+  renderBlackjack();
 
   const adminToken = localStorage.getItem('lb_admin_token');
   if (adminToken) {
