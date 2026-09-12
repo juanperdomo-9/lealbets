@@ -12,6 +12,9 @@ let CART = [];
 let cartPanelOpen = false;
 let expandedMatches = new Set();
 let expandedPlayers = new Set();
+let activeBoostId = null; // superaumento cargado en el carrito actual (se pierde si se toca algo a mano)
+let boostDraftMatchId = null; // admin: partido elegido para armar un superaumento nuevo
+let boostDraftLegs = []; // admin: selecciones elegidas para ese superaumento
 
 // ---------- íconos (SVG en línea, sin dependencias externas) ----------
 const ICONS = {
@@ -30,6 +33,7 @@ const ICONS = {
   users: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.3 3-6 7-6s7 2.7 7 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2c2.7.5 5 2.6 5 5.8"/></svg>`,
   undo: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>`,
   ticket: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/><line x1="10" y1="6.5" x2="10" y2="8" stroke-dasharray="1 2"/><line x1="10" y1="16" x2="10" y2="17.5" stroke-dasharray="1 2"/><line x1="10" y1="11" x2="10" y2="13" stroke-dasharray="1 2"/></svg>`,
+  fire: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c2 4-2 5-2 9a2 2 0 0 0 4 0c0-1-.5-2-.5-2s1.5 1.2 1.5 4.2a4 4 0 0 1-8 0C7 8 10 6 12 2z"/></svg>`,
 };
 function icon(name, size) {
   const s = size || 14;
@@ -325,6 +329,7 @@ function togglePlayerExpand(key) {
 }
 function toggleLeg(matchId, pick) {
   if (!ME) { toast('Entrá con tu usuario para apostar'); return; }
+  activeBoostId = null; // tocar algo a mano rompe el combo fijo del superaumento
   const m = STATE.matches.find((mm) => mm.id === matchId);
   const odds = oddsFor(m, pick);
   const label = pickLabel(pick, m);
@@ -336,6 +341,7 @@ function toggleLeg(matchId, pick) {
   renderCartBar();
 }
 function removeFromCart(i) {
+  activeBoostId = null;
   CART.splice(i, 1);
   if (CART.length === 0) cartPanelOpen = false;
   renderMatches();
@@ -345,7 +351,15 @@ function toggleCartPanel() {
   cartPanelOpen = !cartPanelOpen;
   renderCartBar();
 }
+function activeBoost() {
+  if (!activeBoostId) return null;
+  const b = (STATE.superBoosts || []).find((x) => x.id === activeBoostId);
+  if (!b) { activeBoostId = null; return null; }
+  return b;
+}
 function combinedOddsValue() {
+  const boost = activeBoost();
+  if (boost) return boost.boostedOdds;
   return Math.round(CART.reduce((p, l) => p * l.odds, 1) * 100) / 100;
 }
 function updateComboPreview() {
@@ -354,22 +368,44 @@ function updateComboPreview() {
   document.getElementById('comboPreview').textContent =
     val > 0 ? `Si acertás todo, cobrás ${Math.round(val * odds)} fichas` : `Si acertás todo, cobrás fichas × ${odds}`;
 }
+function applyBoostToCart(boostId) {
+  if (!ME) { toast('Entrá con tu usuario para apostar'); return; }
+  const boost = (STATE.superBoosts || []).find((b) => b.id === boostId);
+  if (!boost) { toast('Ese superaumento ya no está disponible'); return; }
+  CART = boost.legs.map((l) => ({
+    matchId: boost.matchId, pick: l.pick, odds: l.odds, label: l.label,
+    matchLabel: `${boost.homeName} vs ${boost.awayName}`,
+  }));
+  activeBoostId = boost.id;
+  cartPanelOpen = true;
+  renderMatches();
+  renderCartBar();
+  toast(`Superaumento cargado: cuota ${boost.boostedOdds}`);
+}
 async function confirmCombo() {
   const stakeInput = document.getElementById('comboStake');
   const stake = parseInt(stakeInput.value, 10);
   if (CART.length === 0) { toast('Elegí al menos una selección'); return; }
   if (!stake || stake <= 0) { toast('Poné un monto válido'); return; }
+  const boost = activeBoost();
+  const maxBoostStake = STATE.maxSuperBoostStake || 10000;
+  if (boost && stake > maxBoostStake) {
+    toast(`El superaumento tiene un tope de ${maxBoostStake} fichas`);
+    return;
+  }
   try {
     const legs = CART.map((l) => ({ matchId: l.matchId, pick: l.pick }));
-    const result = await apiFetch('/bets', { method: 'POST', body: { legs, stake } });
+    const result = await apiFetch('/bets', { method: 'POST', body: { legs, stake, superBoostId: boost ? boost.id : null } });
     const wasCombo = CART.length > 1;
     CART = [];
     cartPanelOpen = false;
+    activeBoostId = null;
     await loadState();
     await loadMyBets();
     renderAll();
     toast(result.wasReset
       ? 'Te quedaste sin fichas — se te recargó la cuenta'
+      : result.boostApplied ? `¡Superaumento aplicado! Cuota ${result.combinedOdds}`
       : (wasCombo ? 'Combinada confirmada' : 'Apuesta confirmada'));
   } catch (e) { toast(e.message); }
 }
@@ -388,13 +424,18 @@ function renderCartBar() {
   const bar = document.getElementById('cartBar');
   if (!bar) return;
   if (CART.length === 0) { bar.innerHTML = ''; return; }
+  const boost = activeBoost();
   const combinedOdds = combinedOddsValue();
-  let html = `<div class="cart-summary" onclick="toggleCartPanel()">
-    <div class="info"><span class="badge">${CART.length}</span>${CART.length === 1 ? 'selección' : 'selecciones'}<small>cuota combinada ${combinedOdds}</small></div>
+  const maxBoostStake = STATE.maxSuperBoostStake || 10000;
+  let html = `<div class="cart-summary${boost ? ' boosted' : ''}" onclick="toggleCartPanel()">
+    <div class="info"><span class="badge">${boost ? icon('fire', 13) : CART.length}</span>${boost ? 'Superaumento' : (CART.length === 1 ? 'selección' : 'selecciones')}<small>cuota combinada ${combinedOdds}</small></div>
     <div class="toggle${cartPanelOpen ? ' open' : ''}">${cartPanelOpen ? 'Cerrar' : 'Ver apuesta'}${icon('chevron', 13)}</div>
   </div>`;
   if (cartPanelOpen) {
     html += `<div class="cart-panel">`;
+    if (boost) {
+      html += `<div class="boost-cart-hint">${icon('fire', 13)}Superaumento activo: cuota fija ${boost.boostedOdds} · tope ${maxBoostStake} fichas</div>`;
+    }
     CART.forEach((l, i) => {
       html += `<div class="cart-leg">
         <span>${l.matchLabel}<small>${l.label} · cuota ${l.odds}</small></span>
@@ -402,9 +443,9 @@ function renderCartBar() {
       </div>`;
     });
     html += `<div class="slip" style="border-top:none;padding-top:12px;">
-      <label>Monto a apostar (fichas)</label>
+      <label>Monto a apostar (fichas)${boost ? ` — máximo ${maxBoostStake}` : ''}</label>
       <div class="slip-row">
-        <input id="comboStake" type="number" min="1" placeholder="Fichas" oninput="updateComboPreview()">
+        <input id="comboStake" type="number" min="1" ${boost ? `max="${maxBoostStake}"` : ''} placeholder="Fichas" oninput="updateComboPreview()">
         <button class="confirm" onclick="confirmCombo()">${icon('check', 13)}Confirmar</button>
       </div>
       <div class="payout" id="comboPreview">Si acertás todo, cobrás fichas × ${combinedOdds}</div>
@@ -412,6 +453,33 @@ function renderCartBar() {
     html += `</div>`;
   }
   bar.innerHTML = html;
+}
+
+function renderSuperBoosts() {
+  const bar = document.getElementById('superBoostBar');
+  if (!bar) return;
+  const boosts = STATE.superBoosts || [];
+  if (boosts.length === 0) { bar.innerHTML = ''; return; }
+  const maxBoostStake = STATE.maxSuperBoostStake || 10000;
+  bar.innerHTML = boosts.map((b) => `
+    <div class="ticket boost-ticket">
+      <div class="ticket-body">
+        <div class="ticket-meta">
+          <span class="status-pill boost-pill"><span class="dot"></span>${icon('fire', 11)}Superaumento</span>
+          <span class="match-id">Cuota especial</span>
+        </div>
+        <div class="ticket-teams" style="cursor:default;">
+          <div class="team-chip">${crestHtml(b.homeName)}<span class="name">${b.homeName}</span></div>
+          <span class="vs-badge">VS</span>
+          <div class="team-chip">${crestHtml(b.awayName)}<span class="name">${b.awayName}</span></div>
+        </div>
+        <div class="boost-legs">${b.legs.map((l) => `<div class="boost-leg">${icon('check', 12)}${l.label}</div>`).join('')}</div>
+        <div class="boost-odds-row"><span class="old">${b.naturalOdds}</span>${icon('login', 14)}<span class="new">${b.boostedOdds}</span></div>
+        <div class="boost-cap">Máximo ${maxBoostStake} fichas con esta cuota especial</div>
+        <button class="boost-cta" onclick="applyBoostToCart('${b.id}')">${icon('check', 14)}Agregar esta combinada</button>
+      </div>
+    </div>
+  `).join('');
 }
 
 function renderPlayerPropsBlock(m) {
@@ -531,15 +599,46 @@ function renderMatches() {
   list.innerHTML = html;
 }
 
+let myBetsView = 'pending';
+function setMyBetsView(view) {
+  myBetsView = view;
+  document.querySelectorAll('.subtabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  renderMyBets();
+}
+
 function renderMyBets() {
   const list = document.getElementById('myBetsList');
   if (!ME) { list.innerHTML = `<div class="empty">${icon('lock', 26)}Entrá con tu usuario para ver tus apuestas.</div>`; return; }
-  const mine = MY_BETS.slice().sort((a, b) => b.placedAt - a.placedAt);
+  const isPendingView = myBetsView === 'pending';
+  const mine = MY_BETS.filter((b) => {
+    const isPending = !b.settled && !b.cancelled;
+    return isPendingView ? isPending : !isPending;
+  }).sort((a, b) => b.placedAt - a.placedAt);
+
   if (mine.length === 0) {
-    list.innerHTML = `<div class="empty">${icon('ticket', 28)}Todavía no hiciste ninguna apuesta.</div>`;
+    list.innerHTML = isPendingView
+      ? `<div class="empty">${icon('ticket', 28)}Todavía no tenés apuestas pendientes.</div>`
+      : `<div class="empty">${icon('trophy', 28)}Todavía no tenés apuestas resueltas.</div>`;
     return;
   }
-  list.innerHTML = mine.map((b) => {
+
+  let summaryHtml = '';
+  if (!isPendingView) {
+    let wins = 0, losses = 0, net = 0;
+    for (const b of mine) {
+      if (b.cancelled || b.voided) continue;
+      const payoutOdds = b.effectiveOdds || b.combinedOdds;
+      if (b.won) { wins++; net += Math.round(b.stake * payoutOdds) - b.stake; }
+      else { losses++; net -= b.stake; }
+    }
+    summaryHtml = `<div class="bets-summary">
+      <div class="bets-summary-item win"><span>${wins}</span>ganadas</div>
+      <div class="bets-summary-item lose"><span>${losses}</span>perdidas</div>
+      <div class="bets-summary-item ${net >= 0 ? 'win' : 'lose'}"><span>${net >= 0 ? '+' : ''}${net}</span>neto</div>
+    </div>`;
+  }
+
+  list.innerHTML = summaryHtml + mine.map((b) => {
     const legsDesc = b.legs.map((l) => {
       const m = STATE.matches.find((mm) => mm.id === l.matchId);
       const label = m ? `${pickLabel(l.pick, m)} (${m.homeName} vs ${m.awayName})` : pickLabel(l.pick, { homeName: '?', awayName: '?', odds: { goals: { line: 2.5 } } });
@@ -554,7 +653,12 @@ function renderMyBets() {
     else if (b.won) { statusClass = 'st-win'; tag = `<span class="bet-tag win">+${Math.round(b.stake * payoutOdds)}</span>`; }
     else { statusClass = 'st-lose'; tag = `<span class="bet-tag lose">-${b.stake}</span>`; }
     const comboTag = b.legs.length > 1 ? 'Combinada · ' : '';
-    const potentialOdds = Math.round(b.legs.filter((l) => l.result !== 'void').reduce((p, l) => p * l.oddsAtBet, 1) * 100) / 100;
+    const activeLegsPreview = b.legs.filter((l) => l.result !== 'void');
+    // un superaumento paga a su cuota fija mientras ninguna pata se haya anulado
+    // (sus patas son siempre del mismo partido, así que se resuelven todas juntas).
+    const potentialOdds = (b.superBoostId && activeLegsPreview.length === b.legs.length)
+      ? b.combinedOdds
+      : Math.round(activeLegsPreview.reduce((p, l) => p * l.oddsAtBet, 1) * 100) / 100;
     const potentialText = (!b.settled && !b.cancelled) ? ` · si ganás, cobrás ${Math.round(b.stake * potentialOdds)} fichas` : '';
     const cashOutBtn = (!b.settled && !b.cancelled)
       ? `<button class="bet-cashout" onclick="cashOutBet('${b.id}')">${icon('close', 11)}Cerrar apuesta (devolver ${b.stake} fichas)</button>`
@@ -628,12 +732,145 @@ function renderAdmin() {
     : '<option value="">No hay partidos pendientes</option>';
   if (pending.some((m) => m.id === previousSelection)) pendingSel.value = previousSelection;
   renderPlayerStatsForm();
+
+  document.getElementById('boostMaxHint').textContent =
+    `Máximo ${STATE.maxSuperBoostStake || 10000} fichas por apuesta con esta cuota especial.`;
+  const boostSel = document.getElementById('boostMatchSelect');
+  const previousBoostSelection = boostSel.value || boostDraftMatchId;
+  boostSel.innerHTML = pending.length
+    ? pending.map((m) => `<option value="${m.id}">${m.homeName} vs ${m.awayName}</option>`).join('')
+    : '<option value="">No hay partidos pendientes</option>';
+  if (pending.some((m) => m.id === previousBoostSelection)) boostSel.value = previousBoostSelection;
+  boostDraftMatchId = boostSel.value || null;
+  renderBoostMarkets();
+  updateBoostNaturalPreview();
+  renderActiveBoostsList();
+}
+
+// ---------- admin: superaumento ----------
+function isBoostSelected(pick) {
+  return boostDraftLegs.includes(pick);
+}
+function boostOddsBtn(pick, label, value) {
+  const selected = isBoostSelected(pick);
+  return `<div class="odds-btn${selected ? ' selected' : ''}" onclick="toggleBoostLeg('${pick}')">
+    <span class="lbl">${label}</span><span class="val">${value}</span>
+    ${selected ? `<span class="check">${icon('check', 9)}</span>` : ''}
+  </div>`;
+}
+function toggleBoostLeg(pick) {
+  const idx = boostDraftLegs.indexOf(pick);
+  if (idx > -1) boostDraftLegs.splice(idx, 1);
+  else boostDraftLegs.push(pick);
+  renderBoostMarkets();
+  updateBoostNaturalPreview();
+}
+function onBoostMatchChange() {
+  boostDraftMatchId = document.getElementById('boostMatchSelect').value || null;
+  boostDraftLegs = [];
+  renderBoostMarkets();
+  updateBoostNaturalPreview();
+}
+function renderBoostMarkets() {
+  const container = document.getElementById('boostMarketsContainer');
+  const m = STATE.matches.find((mm) => mm.id === boostDraftMatchId);
+  if (!m) { container.innerHTML = ''; return; }
+  let html = `
+    <div class="market-label">${icon('ball')}Resultado</div>
+    <div class="odds-row">
+      ${boostOddsBtn('home', m.homeName, m.odds.home)}
+      ${boostOddsBtn('draw', 'Empate', m.odds.draw)}
+      ${boostOddsBtn('away', m.awayName, m.odds.away)}
+    </div>
+    <div class="market-label">${icon('shuffle')}Doble oportunidad</div>
+    <div class="odds-row">
+      ${boostOddsBtn('dc_1x', m.homeName + ' o X', m.odds.dc.oneX)}
+      ${boostOddsBtn('dc_12', '1 o 2', m.odds.dc.oneTwo)}
+      ${boostOddsBtn('dc_x2', 'X o ' + m.awayName, m.odds.dc.xTwo)}
+    </div>
+    <div class="market-label">${icon('goal')}Goles (línea ${m.odds.goals.line})</div>
+    <div class="odds-row" style="grid-template-columns:1fr 1fr;">
+      ${boostOddsBtn('goals_over', 'Más de ' + m.odds.goals.line, m.odds.goals.over)}
+      ${boostOddsBtn('goals_under', 'Menos de ' + m.odds.goals.line, m.odds.goals.under)}
+    </div>
+    <div class="market-label">${icon('handshake')}Ambos equipos anotan</div>
+    <div class="odds-row" style="grid-template-columns:1fr 1fr;">
+      ${boostOddsBtn('btts_yes', 'Sí', m.odds.btts.yes)}
+      ${boostOddsBtn('btts_no', 'No', m.odds.btts.no)}
+    </div>`;
+  if (m.playerProps) {
+    const THRESHOLD_MARKETS = [['atajadas', 'Atajadas'], ['faltas', 'Faltas cometidas'], ['remates', 'Remates'], ['remates_arco', 'Remates al arco']];
+    const BINARY_MARKETS = [['gol', 'Gol'], ['asistencia', 'Asistencia'], ['amarilla', 'Amarilla'], ['roja', 'Roja']];
+    html += `<div class="market-label">${icon('users')}Jugadores de LEAL</div>`;
+    for (const playerName of orderedPlayerNames(m.playerProps)) {
+      const props = m.playerProps[playerName];
+      html += `<div class="player-props-name" style="cursor:default;"><span class="player-props-left"><span class="player-avatar">${initials(playerName)}</span>${playerName}</span></div>`;
+      for (const [market, label] of THRESHOLD_MARKETS) {
+        if (!props[market]) continue;
+        const thresholds = Object.keys(props[market]);
+        html += `<div class="prop-sublabel">${label}</div><div class="odds-row" style="grid-template-columns:repeat(${thresholds.length},1fr);">`;
+        for (const t of thresholds) html += boostOddsBtn(`prop|${playerName}|${market}|${t}`, `${t}+`, props[market][t]);
+        html += `</div>`;
+      }
+      const activeBinary = BINARY_MARKETS.filter(([market]) => props[market] !== undefined);
+      if (activeBinary.length) {
+        html += `<div class="odds-row" style="grid-template-columns:repeat(${activeBinary.length},1fr);margin-top:6px;">`;
+        for (const [market, label] of activeBinary) html += boostOddsBtn(`prop|${playerName}|${market}`, label, props[market]);
+        html += `</div>`;
+      }
+    }
+  }
+  container.innerHTML = html;
+}
+function updateBoostNaturalPreview() {
+  const preview = document.getElementById('boostNaturalPreview');
+  const oddsEl = document.getElementById('boostNaturalOdds');
+  const m = STATE.matches.find((mm) => mm.id === boostDraftMatchId);
+  if (!m || boostDraftLegs.length === 0) { preview.style.display = 'none'; return; }
+  const natural = Math.round(boostDraftLegs.reduce((p, pick) => p * oddsFor(m, pick), 1) * 100) / 100;
+  oddsEl.textContent = natural;
+  preview.style.display = 'flex';
+}
+async function createSuperBoost() {
+  if (!boostDraftMatchId) { toast('Elegí un partido'); return; }
+  if (boostDraftLegs.length === 0) { toast('Elegí al menos una selección'); return; }
+  const boostedOdds = parseFloat(document.getElementById('boostNewOdds').value);
+  if (!boostedOdds || boostedOdds <= 1) { toast('Poné una cuota nueva válida'); return; }
+  try {
+    await apiFetch('/admin/superboost', { method: 'POST', admin: true, body: { matchId: boostDraftMatchId, legs: boostDraftLegs, boostedOdds } });
+    boostDraftLegs = [];
+    document.getElementById('boostNewOdds').value = '';
+    await loadState();
+    renderAll();
+    toast('Superaumento creado');
+  } catch (e) { toast(e.message); }
+}
+async function deactivateSuperBoost(id) {
+  try {
+    await apiFetch(`/admin/superboost/${id}/deactivate`, { method: 'POST', admin: true });
+    await loadState();
+    renderAll();
+    toast('Superaumento desactivado');
+  } catch (e) { toast(e.message); }
+}
+function renderActiveBoostsList() {
+  const container = document.getElementById('activeBoostsList');
+  if (!container) return;
+  const boosts = STATE.superBoosts || [];
+  if (boosts.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = `<div class="section-title" style="margin-top:18px;">${icon('fire', 13)}Superaumentos activos</div>` + boosts.map((b) => `
+    <div class="active-boost-row">
+      <span>${b.homeName} vs ${b.awayName}<br><small style="color:var(--chalk-faint);">${b.legs.map((l) => l.label).join(' + ')} · ${b.naturalOdds} → ${b.boostedOdds}</small></span>
+      <button class="deactivate-btn" onclick="deactivateSuperBoost('${b.id}')">Desactivar</button>
+    </div>
+  `).join('');
 }
 
 function renderAll(skipAdmin) {
   try {
     document.getElementById('playerNameLbl').textContent = ME || '—';
     document.getElementById('chipCount').textContent = ME ? Math.round(myBalance()) : 0;
+    renderSuperBoosts();
     renderMatches();
     renderMyBets();
     renderRanking();

@@ -58,10 +58,15 @@
 
   <main>
     <section id="tab-matches" class="active">
+      <div id="superBoostBar"></div>
       <div id="matchesList"></div>
     </section>
 
     <section id="tab-mybets">
+      <div class="subtabs">
+        <button data-view="pending" class="active" onclick="setMyBetsView('pending')">Pendientes</button>
+        <button data-view="resolved" onclick="setMyBetsView('resolved')">Apuestas resueltas</button>
+      </div>
       <div id="myBetsList"></div>
     </section>
 
@@ -96,6 +101,21 @@
         <label>Visitante</label>
         <select id="matchAway"></select>
         <button onclick="createMatch()">Crear partido y calcular cuotas</button>
+      </div>
+
+      <div class="card">
+        <h3>Superaumento</h3>
+        <label>Partido</label>
+        <select id="boostMatchSelect" onchange="onBoostMatchChange()"></select>
+        <div id="boostMarketsContainer"></div>
+        <div class="boost-natural-preview" id="boostNaturalPreview" style="display:none;">
+          Cuota natural de la combinada <b id="boostNaturalOdds">—</b>
+        </div>
+        <label>Cuota nueva (superaumento)</label>
+        <input id="boostNewOdds" type="number" min="1.01" step="0.01" placeholder="Ej: 4.00">
+        <div class="field-hint" id="boostMaxHint">Máximo 10.000 fichas por apuesta con esta cuota especial.</div>
+        <button onclick="createSuperBoost()">Crear superaumento</button>
+        <div id="activeBoostsList"></div>
       </div>
 
       <div class="card">

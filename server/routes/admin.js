@@ -1,8 +1,8 @@
 const express = require('express');
 const { pool, uid, applyBalanceDelta } = require('../db');
 const { requireAdmin } = require('../auth');
-const { computeOdds, updateElo, evaluateBet, parsePropPick } = require('../oddsEngine');
-const { syncLealProps } = require('../state');
+const { computeOdds, updateElo, evaluateBet, parsePropPick, oddsFor } = require('../oddsEngine');
+const { syncLealProps, rowToMatch } = require('../state');
 const { broadcastStateUpdate } = require('../realtime');
 
 const router = express.Router();
@@ -44,6 +44,55 @@ router.post('/matches', async (req, res) => {
       [uid(), home.id, away.id, home.name, away.name, JSON.stringify(odds), Date.now()]
     );
     await syncLealProps();
+    broadcastStateUpdate();
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+// Superaumento: el admin arma una combinada de un solo partido y le pone una
+// cuota fija más alta que la natural. Se muestra como cartel fijo arriba de
+// los partidos hasta que se desactiva o el partido termina.
+router.post('/superboost', async (req, res) => {
+  try {
+    const matchId = String(req.body.matchId || '');
+    const picks = Array.isArray(req.body.legs) ? req.body.legs.map(String) : [];
+    const boostedOdds = Math.round(Number(req.body.boostedOdds) * 100) / 100;
+    if (picks.length === 0) return res.status(400).json({ error: 'Elegí al menos una selección' });
+    if (!Number.isFinite(boostedOdds) || boostedOdds <= 1) {
+      return res.status(400).json({ error: 'Poné una cuota nueva válida' });
+    }
+    const { rows } = await pool.query('SELECT * FROM matches WHERE id=$1', [matchId]);
+    if (rows.length === 0) return res.status(400).json({ error: 'Partido inválido' });
+    if (rows[0].status !== 'upcoming') return res.status(400).json({ error: 'Ese partido ya no está pendiente' });
+    const match = rowToMatch(rows[0]);
+    let naturalOdds = 1;
+    for (const pick of picks) {
+      const odds = oddsFor(match, pick);
+      if (odds === null || odds === undefined) return res.status(400).json({ error: `Selección inválida: ${pick}` });
+      naturalOdds *= odds;
+    }
+    naturalOdds = Math.round(naturalOdds * 100) / 100;
+    if (boostedOdds <= naturalOdds) {
+      return res.status(400).json({ error: `La cuota nueva tiene que ser mayor a la cuota natural (${naturalOdds})` });
+    }
+    await pool.query(
+      'INSERT INTO super_boosts (id, match_id, legs, boosted_odds, active, created_at) VALUES ($1,$2,$3,$4,TRUE,$5)',
+      [uid(), matchId, JSON.stringify(picks), boostedOdds, Date.now()]
+    );
+    broadcastStateUpdate();
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+router.post('/superboost/:id/deactivate', async (req, res) => {
+  try {
+    await pool.query('UPDATE super_boosts SET active=FALSE WHERE id=$1', [req.params.id]);
     broadcastStateUpdate();
     res.json({ ok: true });
   } catch (e) {
@@ -153,7 +202,13 @@ router.post('/matches/:id/result', async (req, res) => {
           await applyBalanceDelta(client, bet.user_name, Number(bet.stake));
         } else {
           won = true;
-          effectiveOdds = Math.round(activeLegs.reduce((p, l) => p * Number(l.oddsAtBet), 1) * 100) / 100;
+          // si es un superaumento y ninguna pata se anuló, se paga la cuota fija que
+          // puso el admin; si alguna pata se anuló, no queda "el combo completo" y se
+          // vuelve al cálculo normal (producto de las cuotas reales que sobrevivieron).
+          const allLegsActive = activeLegs.length === legs.length;
+          effectiveOdds = (bet.super_boost_id && allLegsActive)
+            ? Number(bet.combined_odds)
+            : Math.round(activeLegs.reduce((p, l) => p * Number(l.oddsAtBet), 1) * 100) / 100;
           await applyBalanceDelta(client, bet.user_name, Number(bet.stake) * effectiveOdds);
         }
       }

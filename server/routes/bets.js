@@ -2,6 +2,7 @@ const express = require('express');
 const { pool, uid, applyBalanceDelta } = require('../db');
 const { requireAuth } = require('../auth');
 const { oddsFor } = require('../oddsEngine');
+const { MAX_SUPERBOOST_STAKE } = require('../constants');
 const { broadcastStateUpdate } = require('../realtime');
 const { rowToMatch } = require('../state');
 
@@ -19,6 +20,7 @@ function rowToBet(r) {
     voided: r.voided,
     cancelled: r.cancelled,
     effectiveOdds: r.effective_odds === null || r.effective_odds === undefined ? null : Number(r.effective_odds),
+    superBoostId: r.super_boost_id || null,
     placedAt: Number(r.placed_at),
   };
 }
@@ -65,19 +67,49 @@ router.post('/', requireAuth, async (req, res) => {
       }
       legs.push({ matchId, pick, oddsAtBet: odds, result: null });
     }
-    const combinedOdds = Math.round(legs.reduce((p, l) => p * l.oddsAtBet, 1) * 100) / 100;
+    let combinedOdds = Math.round(legs.reduce((p, l) => p * l.oddsAtBet, 1) * 100) / 100;
+
+    // superaumento: si el combo enviado es exactamente el que armó el admin, se paga
+    // a la cuota fija que puso (nunca se confía en una cuota que mande el cliente).
+    let superBoostId = null;
+    const requestedBoostId = req.body.superBoostId ? String(req.body.superBoostId) : null;
+    if (requestedBoostId) {
+      const { rows: brows } = await client.query(
+        `SELECT sb.*, m.status AS match_status FROM super_boosts sb
+         JOIN matches m ON m.id = sb.match_id WHERE sb.id=$1 AND sb.active=TRUE`,
+        [requestedBoostId]
+      );
+      const boost = brows[0];
+      if (boost && boost.match_status === 'upcoming') {
+        const submitted = new Set(legs.map((l) => l.matchId + '::' + l.pick));
+        const boostSet = new Set(boost.legs.map((pick) => boost.match_id + '::' + pick));
+        const sameSize = submitted.size === boostSet.size;
+        const allMatch = sameSize && [...boostSet].every((k) => submitted.has(k));
+        if (allMatch) {
+          if (stake > MAX_SUPERBOOST_STAKE) {
+            throw Object.assign(new Error(`El superaumento tiene un tope de ${MAX_SUPERBOOST_STAKE} fichas`), { status: 400 });
+          }
+          combinedOdds = Number(boost.boosted_odds);
+          superBoostId = boost.id;
+        }
+      }
+    }
+
     const id = uid();
     const placedAt = Date.now();
     await client.query(
-      `INSERT INTO bets (id, user_name, stake, combined_odds, legs, settled, won, voided, cancelled, placed_at)
-       VALUES ($1,$2,$3,$4,$5,FALSE,FALSE,FALSE,FALSE,$6)`,
-      [id, req.userName, stake, combinedOdds, JSON.stringify(legs), placedAt]
+      `INSERT INTO bets (id, user_name, stake, combined_odds, legs, settled, won, voided, cancelled, super_boost_id, placed_at)
+       VALUES ($1,$2,$3,$4,$5,FALSE,FALSE,FALSE,FALSE,$6,$7)`,
+      [id, req.userName, stake, combinedOdds, JSON.stringify(legs), superBoostId, placedAt]
     );
     const wasReset = await applyBalanceDelta(client, req.userName, -stake);
     await client.query('COMMIT');
 
     broadcastStateUpdate();
-    res.json({ id, user: req.userName, stake, combinedOdds, legs, settled: false, won: false, voided: false, cancelled: false, placedAt, wasReset });
+    res.json({
+      id, user: req.userName, stake, combinedOdds, legs, settled: false, won: false, voided: false, cancelled: false,
+      superBoostId, boostApplied: !!superBoostId, placedAt, wasReset,
+    });
   } catch (e) {
     await client.query('ROLLBACK');
     if (e.status) return res.status(e.status).json({ error: e.message });

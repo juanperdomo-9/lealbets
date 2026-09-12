@@ -1,6 +1,7 @@
 const { pool } = require('./db');
 const { LEAL_TEAM_NAME, LEAL_PROPS, LEAL_PLAYER_ORDER } = require('./lealProps');
-const { buildDynamicLealProps } = require('./oddsEngine');
+const { buildDynamicLealProps, pickLabel, oddsFor } = require('./oddsEngine');
+const { MAX_SUPERBOOST_STAKE } = require('./constants');
 
 function rowToMatch(r) {
   return {
@@ -63,9 +64,42 @@ async function syncLealProps(client = pool) {
   await client.query('UPDATE matches SET player_props=$1 WHERE id=$2', [JSON.stringify(dynamicProps), match.id]);
 }
 
+// Superaumentos activos (banner promocional fijo arriba de los partidos): las cuotas y
+// etiquetas de cada pata se recalculan siempre desde el partido actual (no se guardan
+// duplicadas), así nunca quedan desactualizadas mientras el partido siga pendiente.
+async function loadActiveSuperBoosts(client = pool) {
+  const { rows } = await client.query(
+    `SELECT sb.id, sb.match_id, sb.legs, sb.boosted_odds, sb.created_at,
+            m.home_name, m.away_name, m.odds, m.player_props, m.status
+     FROM super_boosts sb
+     JOIN matches m ON m.id = sb.match_id
+     WHERE sb.active = TRUE
+     ORDER BY sb.created_at DESC`
+  );
+  return rows
+    .filter((r) => r.status === 'upcoming')
+    .map((r) => {
+      const match = { id: r.match_id, homeName: r.home_name, awayName: r.away_name, odds: r.odds, playerProps: r.player_props };
+      const legs = r.legs.map((pick) => ({ pick, label: pickLabel(pick, match), odds: oddsFor(match, pick) }));
+      const naturalOdds = Math.round(legs.reduce((p, l) => p * (l.odds || 1), 1) * 100) / 100;
+      return {
+        id: r.id,
+        matchId: r.match_id,
+        homeName: r.home_name,
+        awayName: r.away_name,
+        legs,
+        naturalOdds,
+        boostedOdds: Number(r.boosted_odds),
+        createdAt: Number(r.created_at),
+      };
+    });
+}
+
 async function getPublicState() {
-  const [teams, matches, ranking] = await Promise.all([loadTeams(), loadMatches(), loadRanking()]);
-  return { teams, matches, ranking, lealPlayerOrder: LEAL_PLAYER_ORDER };
+  const [teams, matches, ranking, superBoosts] = await Promise.all([
+    loadTeams(), loadMatches(), loadRanking(), loadActiveSuperBoosts(),
+  ]);
+  return { teams, matches, ranking, lealPlayerOrder: LEAL_PLAYER_ORDER, superBoosts, maxSuperBoostStake: MAX_SUPERBOOST_STAKE };
 }
 
 module.exports = {
@@ -75,5 +109,6 @@ module.exports = {
   loadRanking,
   loadPlayerHistoryMap,
   syncLealProps,
+  loadActiveSuperBoosts,
   getPublicState,
 };

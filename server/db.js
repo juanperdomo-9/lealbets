@@ -68,10 +68,25 @@ CREATE TABLE IF NOT EXISTS player_history (
   stats JSONB NOT NULL,
   created_at BIGINT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS super_boosts (
+  id TEXT PRIMARY KEY,
+  match_id TEXT NOT NULL REFERENCES matches(id),
+  legs JSONB NOT NULL,
+  boosted_odds NUMERIC NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at BIGINT NOT NULL
+);
+`;
+
+// Migraciones chiquitas y seguras para bases ya desplegadas (no tocan datos existentes).
+const MIGRATIONS = `
+ALTER TABLE bets ADD COLUMN IF NOT EXISTS super_boost_id TEXT REFERENCES super_boosts(id);
 `;
 
 async function initSchema() {
   await pool.query(SCHEMA);
+  await pool.query(MIGRATIONS);
 }
 
 async function seedIfEmpty() {
