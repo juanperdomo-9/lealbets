@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS super_boosts (
 // Migraciones chiquitas y seguras para bases ya desplegadas (no tocan datos existentes).
 const MIGRATIONS = `
 ALTER TABLE bets ADD COLUMN IF NOT EXISTS super_boost_id TEXT REFERENCES super_boosts(id);
+ALTER TABLE matches ADD COLUMN IF NOT EXISTS pre_match_ratings JSONB;
 `;
 
 async function initSchema() {

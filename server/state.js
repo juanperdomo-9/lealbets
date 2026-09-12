@@ -2,6 +2,7 @@ const { pool } = require('./db');
 const { LEAL_TEAM_NAME, LEAL_PROPS, LEAL_PLAYER_ORDER } = require('./lealProps');
 const { buildDynamicLealProps, pickLabel, oddsFor } = require('./oddsEngine');
 const { MAX_SUPERBOOST_STAKE } = require('./constants');
+const { isMarketClosed } = require('./marketHours');
 
 function rowToMatch(r) {
   return {
@@ -96,10 +97,13 @@ async function loadActiveSuperBoosts(client = pool) {
 }
 
 async function getPublicState() {
-  const [teams, matches, ranking, superBoosts] = await Promise.all([
-    loadTeams(), loadMatches(), loadRanking(), loadActiveSuperBoosts(),
+  const [teams, matches, ranking, superBoosts, marketClosed] = await Promise.all([
+    loadTeams(), loadMatches(), loadRanking(), loadActiveSuperBoosts(), isMarketClosed(),
   ]);
-  return { teams, matches, ranking, lealPlayerOrder: LEAL_PLAYER_ORDER, superBoosts, maxSuperBoostStake: MAX_SUPERBOOST_STAKE };
+  return {
+    teams, matches, ranking, lealPlayerOrder: LEAL_PLAYER_ORDER, superBoosts,
+    maxSuperBoostStake: MAX_SUPERBOOST_STAKE, marketClosed,
+  };
 }
 
 module.exports = {

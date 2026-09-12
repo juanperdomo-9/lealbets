@@ -3,6 +3,7 @@ const { pool, uid, applyBalanceDelta, resetIfDepletedAndNoPendingBets } = requir
 const { requireAuth } = require('../auth');
 const { oddsFor } = require('../oddsEngine');
 const { MAX_SUPERBOOST_STAKE } = require('../constants');
+const { isMarketClosed } = require('../marketHours');
 const { broadcastStateUpdate } = require('../realtime');
 const { rowToMatch } = require('../state');
 
@@ -36,6 +37,9 @@ router.get('/mine', requireAuth, async (req, res) => {
 // Confirmar una apuesta (simple o combinada). El servidor recalcula las cuotas
 // vigentes de cada selección: nunca confía en la cuota que mande el cliente.
 router.post('/', requireAuth, async (req, res) => {
+  if (await isMarketClosed()) {
+    return res.status(403).json({ error: 'Mercado cerrado hasta que se carguen los resultados del fin de semana' });
+  }
   const legsInput = Array.isArray(req.body.legs) ? req.body.legs : [];
   const stake = Number(req.body.stake);
   if (legsInput.length === 0) return res.status(400).json({ error: 'Elegí al menos una selección' });
@@ -133,6 +137,9 @@ router.post('/', requireAuth, async (req, res) => {
 
 // Cerrar apuesta (cash out simple): mientras sigue pendiente, se devuelve el monto exacto.
 router.post('/:id/cashout', requireAuth, async (req, res) => {
+  if (await isMarketClosed()) {
+    return res.status(403).json({ error: 'Mercado cerrado hasta que se carguen los resultados del fin de semana' });
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

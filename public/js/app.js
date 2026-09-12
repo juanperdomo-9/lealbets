@@ -158,7 +158,8 @@ function isSelected(matchId, pick) {
 }
 function oddsBtn(matchId, pick, label, value) {
   const selected = isSelected(matchId, pick);
-  return `<div class="odds-btn${selected ? ' selected' : ''}" onclick="toggleLeg('${matchId}','${pick}')">
+  const closed = STATE.marketClosed ? ' closed' : '';
+  return `<div class="odds-btn${selected ? ' selected' : ''}${closed}" onclick="toggleLeg('${matchId}','${pick}')">
     <span class="lbl">${label}</span><span class="val">${value}</span>
     ${selected ? `<span class="check">${icon('check', 9)}</span>` : ''}
   </div>`;
@@ -308,21 +309,7 @@ async function submitResult() {
   const hg = document.getElementById('scoreHome').value;
   const ag = document.getElementById('scoreAway').value;
   if (!matchId || hg === '' || ag === '') { toast('Cargá el marcador completo'); return; }
-  const playerStats = {};
-  const didNotPlay = [];
-  document.querySelectorAll('#playerStatsForm .statInput').forEach((inp) => {
-    const player = inp.dataset.player, market = inp.dataset.market;
-    playerStats[player] = playerStats[player] || {};
-    playerStats[player][market] = parseInt(inp.value, 10) || 0;
-  });
-  document.querySelectorAll('#playerStatsForm .statCheck').forEach((chk) => {
-    const player = chk.dataset.player, market = chk.dataset.market;
-    playerStats[player] = playerStats[player] || {};
-    playerStats[player][market] = chk.checked;
-  });
-  document.querySelectorAll('#playerStatsForm .statDidNotPlay').forEach((chk) => {
-    if (chk.checked) didNotPlay.push(chk.dataset.player);
-  });
+  const { playerStats, didNotPlay } = collectStatsFromContainer('playerStatsForm');
   try {
     await apiFetch(`/admin/matches/${matchId}/result`, {
       method: 'POST', admin: true, body: { homeGoals: hg, awayGoals: ag, playerStats, didNotPlay },
@@ -349,6 +336,7 @@ function togglePlayerExpand(key) {
 }
 function toggleLeg(matchId, pick) {
   if (!ME) { toast('Entrá con tu usuario para apostar'); return; }
+  if (STATE.marketClosed) { toast('🔒 Mercado cerrado hasta que se carguen los resultados'); return; }
   activeBoostId = null; // tocar algo a mano rompe el combo fijo del superaumento
   const m = STATE.matches.find((mm) => mm.id === matchId);
   const odds = oddsFor(m, pick);
@@ -390,6 +378,7 @@ function updateComboPreview() {
 }
 function applyBoostToCart(boostId) {
   if (!ME) { toast('Entrá con tu usuario para apostar'); return; }
+  if (STATE.marketClosed) { toast('🔒 Mercado cerrado hasta que se carguen los resultados'); return; }
   if (MY_BETS.some((bet) => bet.superBoostId === boostId)) { toast('Ya usaste este superaumento'); return; }
   const boost = (STATE.superBoosts || []).find((b) => b.id === boostId);
   if (!boost) { toast('Ese superaumento ya no está disponible'); return; }
@@ -404,6 +393,7 @@ function applyBoostToCart(boostId) {
   toast(`Superaumento cargado: cuota ${boost.boostedOdds}`);
 }
 async function confirmCombo() {
+  if (STATE.marketClosed) { toast('🔒 Mercado cerrado hasta que se carguen los resultados'); return; }
   const stakeInput = document.getElementById('comboStake');
   const stake = parseInt(stakeInput.value, 10);
   if (CART.length === 0) { toast('Elegí al menos una selección'); return; }
@@ -431,6 +421,7 @@ async function confirmCombo() {
   } catch (e) { toast(e.message); }
 }
 async function cashOutBet(betId) {
+  if (STATE.marketClosed) { toast('🔒 Mercado cerrado hasta que se carguen los resultados'); return; }
   try {
     await apiFetch(`/bets/${betId}/cashout`, { method: 'POST' });
     await loadState();
@@ -466,14 +457,22 @@ function renderCartBar() {
     html += `<div class="slip" style="border-top:none;padding-top:12px;">
       <label>Monto a apostar (fichas)${boost ? ` — máximo ${maxBoostStake}` : ''}</label>
       <div class="slip-row">
-        <input id="comboStake" type="number" min="1" ${boost ? `max="${maxBoostStake}"` : ''} placeholder="Fichas" oninput="updateComboPreview()">
-        <button class="confirm" onclick="confirmCombo()">${icon('check', 13)}Confirmar</button>
+        <input id="comboStake" type="number" min="1" ${boost ? `max="${maxBoostStake}"` : ''} placeholder="Fichas" oninput="updateComboPreview()" ${STATE.marketClosed ? 'disabled' : ''}>
+        <button class="confirm" onclick="confirmCombo()" ${STATE.marketClosed ? 'disabled' : ''}>${icon(STATE.marketClosed ? 'lock' : 'check', 13)}${STATE.marketClosed ? 'Cerrado' : 'Confirmar'}</button>
       </div>
-      <div class="payout" id="comboPreview">Si acertás todo, cobrás fichas × ${combinedOdds}</div>
+      <div class="payout" id="comboPreview">${STATE.marketClosed ? '🔒 Mercado cerrado hasta que se carguen los resultados' : `Si acertás todo, cobrás fichas × ${combinedOdds}`}</div>
     </div>`;
     html += `</div>`;
   }
   bar.innerHTML = html;
+}
+
+function renderMarketClosedBanner() {
+  const box = document.getElementById('marketClosedBanner');
+  if (!box) return;
+  box.innerHTML = STATE.marketClosed
+    ? `<div class="market-closed-banner">${icon('lock', 16)}<div><b>Mercado cerrado</b><small>No se pueden hacer apuestas nuevas ni cerrar las pendientes. Se reabre en cuanto se carguen los resultados del fin de semana.</small></div></div>`
+    : '';
 }
 
 function renderSuperBoosts() {
@@ -487,6 +486,8 @@ function renderSuperBoosts() {
     const alreadyUsed = ME && MY_BETS.some((bet) => bet.superBoostId === b.id);
     const cta = alreadyUsed
       ? `<button class="boost-cta boost-cta-used" disabled>${icon('check', 14)}Ya usaste este superaumento</button>`
+      : STATE.marketClosed
+      ? `<button class="boost-cta boost-cta-used" disabled>${icon('lock', 14)}Mercado cerrado</button>`
       : `<button class="boost-cta" onclick="applyBoostToCart('${b.id}')">${icon('check', 14)}Agregar esta combinada</button>`;
     return `
     <div class="ticket boost-ticket">
@@ -554,75 +555,197 @@ function renderPlayerPropsBlock(m) {
   return html;
 }
 
+// grilla de estadísticas de jugador reutilizable entre "cargar resultado" y "editar resultado"
+const STAT_COUNT_MARKETS = [
+  ['atajadas', 'Atajadas'], ['faltas', 'Faltas cometidas'],
+  ['remates', 'Remates'], ['remates_arco', 'Remates al arco'],
+  ['gol', 'Goles'], ['asistencia', 'Asistencias'],
+];
+function buildStatsFormHtml(match, prefillStats) {
+  if (!match.playerProps) return '';
+  let html = '';
+  for (const playerName of orderedPlayerNames(match.playerProps)) {
+    const props = match.playerProps[playerName];
+    const prev = (prefillStats && prefillStats[playerName]) || {};
+    const didNotPlayBefore = !!prefillStats && !(playerName in prefillStats);
+    html += `<div class="stat-player"><div class="stat-player-name">${playerName}</div><div class="stat-grid">`;
+    for (const [market, label] of STAT_COUNT_MARKETS) {
+      if (props[market] === undefined) continue;
+      const val = prev[market] !== undefined ? prev[market] : '';
+      html += `<div><label>${label}</label><input type="number" min="0" class="statInput" data-player="${playerName}" data-market="${market}" value="${val}" placeholder="0"></div>`;
+    }
+    html += `</div><div class="stat-checks">`;
+    if (props.amarilla !== undefined) html += `<label><input type="checkbox" class="statCheck" data-player="${playerName}" data-market="amarilla" ${prev.amarilla ? 'checked' : ''}>Amarilla</label>`;
+    if (props.roja !== undefined) html += `<label><input type="checkbox" class="statCheck" data-player="${playerName}" data-market="roja" ${prev.roja ? 'checked' : ''}>Roja</label>`;
+    html += `</div><label class="dnp-row"><input type="checkbox" class="statDidNotPlay" data-player="${playerName}" ${didNotPlayBefore ? 'checked' : ''}>No jugó este partido</label></div>`;
+  }
+  return html;
+}
+function collectStatsFromContainer(containerId) {
+  const playerStats = {};
+  const didNotPlay = [];
+  document.querySelectorAll(`#${containerId} .statInput`).forEach((inp) => {
+    const player = inp.dataset.player, market = inp.dataset.market;
+    playerStats[player] = playerStats[player] || {};
+    playerStats[player][market] = parseInt(inp.value, 10) || 0;
+  });
+  document.querySelectorAll(`#${containerId} .statCheck`).forEach((chk) => {
+    const player = chk.dataset.player, market = chk.dataset.market;
+    playerStats[player] = playerStats[player] || {};
+    playerStats[player][market] = chk.checked;
+  });
+  document.querySelectorAll(`#${containerId} .statDidNotPlay`).forEach((chk) => {
+    if (chk.checked) didNotPlay.push(chk.dataset.player);
+  });
+  return { playerStats, didNotPlay };
+}
+
+// muestra las estadísticas cargadas de un partido finalizado (solo lectura)
+function renderFinishedPlayerStats(m) {
+  if (!m.result || !m.result.playerStats) return '';
+  const STAT_LABELS = [
+    ['gol', 'gol'], ['asistencia', 'asistencia'], ['remates', 'remates'],
+    ['remates_arco', 'remates al arco'], ['faltas', 'faltas'], ['atajadas', 'atajadas'],
+  ];
+  const names = orderedPlayerNames(m.result.playerStats);
+  if (names.length === 0) return '';
+  let html = `<div class="finished-stats">`;
+  for (const playerName of names) {
+    const s = m.result.playerStats[playerName];
+    const chips = [];
+    for (const [key, label] of STAT_LABELS) {
+      if (s[key]) chips.push(`${s[key]} ${label}`);
+    }
+    if (s.amarilla) chips.push('amarilla');
+    if (s.roja) chips.push('roja');
+    html += `<div class="finished-stat-row"><span class="player-avatar">${initials(playerName)}</span><span class="finished-stat-name">${playerName}</span><small>${chips.length ? chips.join(' · ') : 'sin estadísticas'}</small></div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+let editingMatchId = null;
+function startEditMatch(matchId) {
+  editingMatchId = matchId;
+  renderMatches();
+}
+function cancelEditMatch() {
+  editingMatchId = null;
+  renderMatches();
+}
+async function saveMatchEdit(matchId) {
+  const hg = parseInt(document.getElementById(`editScoreHome-${matchId}`).value, 10);
+  const ag = parseInt(document.getElementById(`editScoreAway-${matchId}`).value, 10);
+  if (Number.isNaN(hg) || Number.isNaN(ag) || hg < 0 || ag < 0) { toast('Cargá el marcador completo'); return; }
+  const { playerStats, didNotPlay } = collectStatsFromContainer(`editStatsForm-${matchId}`);
+  try {
+    await apiFetch(`/admin/matches/${matchId}/result`, { method: 'PUT', admin: true, body: { homeGoals: hg, awayGoals: ag, playerStats, didNotPlay } });
+    editingMatchId = null;
+    await loadState();
+    await loadMyBets();
+    renderAll();
+    toast('Resultado corregido, fichas y cuotas recalculadas');
+  } catch (e) { toast(e.message); }
+}
+
 function renderMatches() {
   const list = document.getElementById('matchesList');
   const upcoming = STATE.matches.filter((m) => m.status === 'upcoming').sort((a, b) => b.createdAt - a.createdAt);
   const finished = STATE.matches.filter((m) => m.status === 'finished').sort((a, b) => b.createdAt - a.createdAt);
-  if (STATE.matches.length === 0) {
-    list.innerHTML = `<div class="empty">${icon('ball', 30)}Todavía no hay partidos cargados.<br>Andá a la pestaña Equipos para programar el primero.</div>`;
+  const showing = matchesView === 'upcoming' ? upcoming : finished;
+
+  if (showing.length === 0) {
+    list.innerHTML = matchesView === 'upcoming'
+      ? `<div class="empty">${icon('ball', 30)}Todavía no hay partidos próximos.<br>Andá a la pestaña Equipos para programar uno.</div>`
+      : `<div class="empty">${icon('trophy', 28)}Todavía no hay partidos finalizados.</div>`;
     return;
   }
+
   let html = '';
-  for (const m of upcoming) {
-    const isOpen = expandedMatches.has(m.id);
-    html += `<div class="ticket"><div class="ticket-body">
-      <div class="ticket-meta">
-        <span class="status-pill upcoming"><span class="dot"></span>Próximo</span>
-        <span class="match-id">#${m.id.slice(-4)}</span>
-      </div>
-      <div class="ticket-teams" onclick="toggleMatchExpand('${m.id}')">
-        <div class="team-chip">${crestHtml(m.homeName)}<span class="name">${m.homeName}</span></div>
-        <span class="vs-badge">VS</span>
-        <div class="team-chip">${crestHtml(m.awayName)}<span class="name">${m.awayName}</span></div>
-      </div>
-      <div class="expand-hint${isOpen ? ' open' : ''}" onclick="toggleMatchExpand('${m.id}')">${isOpen ? 'Ocultar apuestas' : 'Ver apuestas de este partido'}${icon('chevron', 13)}</div>`;
+  if (matchesView === 'upcoming') {
+    for (const m of upcoming) {
+      const isOpen = expandedMatches.has(m.id);
+      html += `<div class="ticket"><div class="ticket-body">
+        <div class="ticket-meta">
+          <span class="status-pill upcoming"><span class="dot"></span>Próximo</span>
+          <span class="match-id">#${m.id.slice(-4)}</span>
+        </div>
+        <div class="ticket-teams" onclick="toggleMatchExpand('${m.id}')">
+          <div class="team-chip">${crestHtml(m.homeName)}<span class="name">${m.homeName}</span></div>
+          <span class="vs-badge">VS</span>
+          <div class="team-chip">${crestHtml(m.awayName)}<span class="name">${m.awayName}</span></div>
+        </div>
+        <div class="expand-hint${isOpen ? ' open' : ''}" onclick="toggleMatchExpand('${m.id}')">${isOpen ? 'Ocultar apuestas' : 'Ver apuestas de este partido'}${icon('chevron', 13)}</div>`;
 
-    if (isOpen) {
-      html += `
-      <div class="market-label">${icon('ball')}Resultado</div>
-      <div class="odds-row">
-        ${oddsBtn(m.id, 'home', m.homeName, m.odds.home)}
-        ${oddsBtn(m.id, 'draw', 'Empate', m.odds.draw)}
-        ${oddsBtn(m.id, 'away', m.awayName, m.odds.away)}
-      </div>
+      if (isOpen) {
+        html += `
+        <div class="market-label">${icon('ball')}Resultado</div>
+        <div class="odds-row">
+          ${oddsBtn(m.id, 'home', m.homeName, m.odds.home)}
+          ${oddsBtn(m.id, 'draw', 'Empate', m.odds.draw)}
+          ${oddsBtn(m.id, 'away', m.awayName, m.odds.away)}
+        </div>
 
-      <div class="market-label">${icon('shuffle')}Doble oportunidad</div>
-      <div class="odds-row">
-        ${oddsBtn(m.id, 'dc_1x', m.homeName + ' o X', m.odds.dc.oneX)}
-        ${oddsBtn(m.id, 'dc_12', '1 o 2', m.odds.dc.oneTwo)}
-        ${oddsBtn(m.id, 'dc_x2', 'X o ' + m.awayName, m.odds.dc.xTwo)}
-      </div>
+        <div class="market-label">${icon('shuffle')}Doble oportunidad</div>
+        <div class="odds-row">
+          ${oddsBtn(m.id, 'dc_1x', m.homeName + ' o X', m.odds.dc.oneX)}
+          ${oddsBtn(m.id, 'dc_12', '1 o 2', m.odds.dc.oneTwo)}
+          ${oddsBtn(m.id, 'dc_x2', 'X o ' + m.awayName, m.odds.dc.xTwo)}
+        </div>
 
-      <div class="market-label">${icon('goal')}Goles (línea ${m.odds.goals.line})</div>
-      <div class="odds-row" style="grid-template-columns:1fr 1fr;">
-        ${oddsBtn(m.id, 'goals_over', 'Más de ' + m.odds.goals.line, m.odds.goals.over)}
-        ${oddsBtn(m.id, 'goals_under', 'Menos de ' + m.odds.goals.line, m.odds.goals.under)}
-      </div>
+        <div class="market-label">${icon('goal')}Goles (línea ${m.odds.goals.line})</div>
+        <div class="odds-row" style="grid-template-columns:1fr 1fr;">
+          ${oddsBtn(m.id, 'goals_over', 'Más de ' + m.odds.goals.line, m.odds.goals.over)}
+          ${oddsBtn(m.id, 'goals_under', 'Menos de ' + m.odds.goals.line, m.odds.goals.under)}
+        </div>
 
-      <div class="market-label">${icon('handshake')}Ambos equipos anotan</div>
-      <div class="odds-row" style="grid-template-columns:1fr 1fr;">
-        ${oddsBtn(m.id, 'btts_yes', 'Sí', m.odds.btts.yes)}
-        ${oddsBtn(m.id, 'btts_no', 'No', m.odds.btts.no)}
-      </div>${m.playerProps ? renderPlayerPropsBlock(m) : ''}`;
+        <div class="market-label">${icon('handshake')}Ambos equipos anotan</div>
+        <div class="odds-row" style="grid-template-columns:1fr 1fr;">
+          ${oddsBtn(m.id, 'btts_yes', 'Sí', m.odds.btts.yes)}
+          ${oddsBtn(m.id, 'btts_no', 'No', m.odds.btts.no)}
+        </div>${m.playerProps ? renderPlayerPropsBlock(m) : ''}`;
+      }
+      html += `</div></div>`;
     }
-    html += `</div></div>`;
-  }
-  for (const m of finished) {
-    const r = m.result;
-    html += `<div class="ticket finished"><div class="ticket-body">
-      <div class="ticket-meta">
-        <span class="status-pill finished"><span class="dot"></span>Finalizado</span>
-        <span class="match-id">#${m.id.slice(-4)}</span>
-      </div>
-      <div class="ticket-teams" style="cursor:default;">
-        <div class="team-chip">${crestHtml(m.homeName)}<span class="name">${m.homeName}</span></div>
-        <span class="vs-badge">VS</span>
-        <div class="team-chip">${crestHtml(m.awayName)}<span class="name">${m.awayName}</span></div>
-      </div>
-      <div class="ticket-result-wrap"><div class="ticket-result">${r.homeGoals} – ${r.awayGoals}</div></div>
-      <div class="ticket-status"><b>1x2</b> ${m.odds.home} / ${m.odds.draw} / ${m.odds.away} &nbsp;·&nbsp; <b>Goles ${m.odds.goals.line}</b> ${m.odds.goals.over} / ${m.odds.goals.under} &nbsp;·&nbsp; <b>Ambos anotan</b> ${m.odds.btts.yes} / ${m.odds.btts.no}</div>
-      ${isAdmin ? `<button class="reopen-btn" onclick="reopenMatch('${m.id}')">${icon('undo', 13)}Reabrir partido (corregir resultado)</button>` : ''}
-    </div></div>`;
+  } else {
+    for (const m of finished) {
+      const r = m.result;
+      const isEditing = isAdmin && editingMatchId === m.id;
+      html += `<div class="ticket finished"><div class="ticket-body">
+        <div class="ticket-meta">
+          <span class="status-pill finished"><span class="dot"></span>Finalizado</span>
+          <span class="match-id">#${m.id.slice(-4)}</span>
+        </div>
+        <div class="ticket-teams" style="cursor:default;">
+          <div class="team-chip">${crestHtml(m.homeName)}<span class="name">${m.homeName}</span></div>
+          <span class="vs-badge">VS</span>
+          <div class="team-chip">${crestHtml(m.awayName)}<span class="name">${m.awayName}</span></div>
+        </div>`;
+
+      if (isEditing) {
+        html += `
+        <div class="result-inline" style="justify-content:center;margin:12px 0;">
+          <input id="editScoreHome-${m.id}" type="number" min="0" value="${r.homeGoals}">
+          <span class="dash">–</span>
+          <input id="editScoreAway-${m.id}" type="number" min="0" value="${r.awayGoals}">
+        </div>
+        <div id="editStatsForm-${m.id}">${buildStatsFormHtml(m, r.playerStats)}</div>
+        <div class="row2" style="margin-top:12px;">
+          <button class="primary-btn" onclick="saveMatchEdit('${m.id}')">Guardar cambios</button>
+          <button class="reopen-btn" onclick="cancelEditMatch()">Cancelar</button>
+        </div>`;
+      } else {
+        html += `
+        <div class="ticket-result-wrap"><div class="ticket-result">${r.homeGoals} – ${r.awayGoals}</div></div>
+        <div class="ticket-status"><b>1x2</b> ${m.odds.home} / ${m.odds.draw} / ${m.odds.away} &nbsp;·&nbsp; <b>Goles ${m.odds.goals.line}</b> ${m.odds.goals.over} / ${m.odds.goals.under} &nbsp;·&nbsp; <b>Ambos anotan</b> ${m.odds.btts.yes} / ${m.odds.btts.no}</div>
+        ${renderFinishedPlayerStats(m)}
+        ${isAdmin ? `<div class="row2" style="margin-top:12px;">
+          <button class="reopen-btn" onclick="startEditMatch('${m.id}')">${icon('undo', 13)}Editar resultado</button>
+          <button class="reopen-btn" onclick="reopenMatch('${m.id}')">${icon('undo', 13)}Reabrir partido</button>
+        </div>` : ''}`;
+      }
+      html += `</div></div>`;
+    }
   }
   list.innerHTML = html;
 }
@@ -630,8 +753,15 @@ function renderMatches() {
 let myBetsView = 'pending';
 function setMyBetsView(view) {
   myBetsView = view;
-  document.querySelectorAll('.subtabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('#myBetsSubtabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   renderMyBets();
+}
+
+let matchesView = 'upcoming';
+function setMatchesView(view) {
+  matchesView = view;
+  document.querySelectorAll('#matchesSubtabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  renderMatches();
 }
 
 function renderMyBets() {
@@ -689,7 +819,9 @@ function renderMyBets() {
       : Math.round(activeLegsPreview.reduce((p, l) => p * l.oddsAtBet, 1) * 100) / 100;
     const potentialText = (!b.settled && !b.cancelled) ? ` · si ganás, cobrás ${Math.round(b.stake * potentialOdds)} fichas` : '';
     const cashOutBtn = (!b.settled && !b.cancelled)
-      ? `<button class="bet-cashout" onclick="cashOutBet('${b.id}')">${icon('close', 11)}Cerrar apuesta (devolver ${b.stake} fichas)</button>`
+      ? (STATE.marketClosed
+        ? `<div class="bet-cashout-locked">${icon('lock', 11)}Cerrado hasta que se carguen los resultados</div>`
+        : `<button class="bet-cashout" onclick="cashOutBet('${b.id}')">${icon('close', 11)}Cerrar apuesta (devolver ${b.stake} fichas)</button>`)
       : '';
     return `<div class="bet-row ${statusClass}">
       <div class="bet-row-top">
@@ -717,25 +849,7 @@ function renderPlayerStatsForm() {
   const matchId = document.getElementById('pendingMatchSelect').value;
   const match = STATE.matches.find((m) => m.id === matchId);
   if (!match || !match.playerProps) { container.innerHTML = ''; return; }
-  const COUNT_MARKETS = [
-    ['atajadas', 'Atajadas'], ['faltas', 'Faltas cometidas'],
-    ['remates', 'Remates'], ['remates_arco', 'Remates al arco'],
-    ['gol', 'Goles'], ['asistencia', 'Asistencias'],
-  ];
-  let html = '';
-  for (const playerName of orderedPlayerNames(match.playerProps)) {
-    const props = match.playerProps[playerName];
-    html += `<div class="stat-player"><div class="stat-player-name">${playerName}</div><div class="stat-grid">`;
-    for (const [market, label] of COUNT_MARKETS) {
-      if (props[market] === undefined) continue;
-      html += `<div><label>${label}</label><input type="number" min="0" class="statInput" data-player="${playerName}" data-market="${market}" placeholder="0"></div>`;
-    }
-    html += `</div><div class="stat-checks">`;
-    if (props.amarilla !== undefined) html += `<label><input type="checkbox" class="statCheck" data-player="${playerName}" data-market="amarilla">Amarilla</label>`;
-    if (props.roja !== undefined) html += `<label><input type="checkbox" class="statCheck" data-player="${playerName}" data-market="roja">Roja</label>`;
-    html += `</div><label class="dnp-row"><input type="checkbox" class="statDidNotPlay" data-player="${playerName}">No jugó este partido</label></div>`;
-  }
-  container.innerHTML = html;
+  container.innerHTML = buildStatsFormHtml(match, null);
 }
 
 function renderAdmin() {
@@ -907,8 +1021,12 @@ function renderAll(skipAdmin) {
   try {
     document.getElementById('playerNameLbl').textContent = ME || '—';
     document.getElementById('chipCount').textContent = ME ? Math.round(myBalance()) : 0;
+    renderMarketClosedBanner();
     renderSuperBoosts();
-    renderMatches();
+    // durante un refresco de fondo (otro usuario hizo algo en otro lado), no
+    // se toca la lista de partidos si hay una edición de resultado en curso:
+    // si no, el formulario se reconstruye solo y se pierde lo que se venía tipeando.
+    if (!(skipAdmin && editingMatchId)) renderMatches();
     renderMyBets();
     renderRanking();
     if (!skipAdmin && isAdmin) renderAdmin();

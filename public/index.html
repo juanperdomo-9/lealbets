@@ -58,12 +58,17 @@
 
   <main>
     <section id="tab-matches" class="active">
+      <div id="marketClosedBanner"></div>
       <div id="superBoostBar"></div>
+      <div class="subtabs" id="matchesSubtabs">
+        <button data-view="upcoming" class="active" onclick="setMatchesView('upcoming')">Próximos</button>
+        <button data-view="finished" onclick="setMatchesView('finished')">Partidos finalizados</button>
+      </div>
       <div id="matchesList"></div>
     </section>
 
     <section id="tab-mybets">
-      <div class="subtabs">
+      <div class="subtabs" id="myBetsSubtabs">
         <button data-view="pending" class="active" onclick="setMyBetsView('pending')">Pendientes</button>
         <button data-view="resolved" onclick="setMyBetsView('resolved')">Apuestas resueltas</button>
       </div>

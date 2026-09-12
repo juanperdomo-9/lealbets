@@ -20,6 +20,9 @@ process.env.DATABASE_URL = 'postgres://localhost/dev-memoria';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-no-usar-en-produccion';
 process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'leal2026';
 process.env.PORT = process.env.PORT || '3000';
+// para poder probar apuestas cualquier día/hora sin que el cierre de mercado
+// de los sábados se interponga (esto NUNCA se setea en producción)
+process.env.DISABLE_MARKET_HOURS = process.env.DISABLE_MARKET_HOURS || 'true';
 
 console.log('== Modo desarrollo: base de datos en memoria (pg-mem), los datos NO persisten ==');
 require('../server/index.js');
