@@ -1244,8 +1244,10 @@ let PN = { phase: 'none', difficulty: 'media', ladder: [], round: 0, multiplier:
 let pnSelectedDifficulty = 'media';
 // estado puramente visual del arco (pelota/arquero); el resultado real ya lo
 // decidió el servidor en /penalty/kick, esto solo lo dramatiza en pantalla.
-const PN_POSITIONS = ['18%', '50%', '82%'];
-function pnRestingVisual() { return { ballIdx: 1, keeperIdx: 1, kicked: false, scored: null, animating: false }; }
+const PN_COLS = ['18%', '50%', '82%'];
+const PN_ROW_BALL_BOTTOM = { high: 130, low: 62 }; // a dónde vuela la pelota, según la fila tocada
+const PN_ROW_ZONE_BOTTOM = { high: 106, low: 38 }; // dónde se dibuja el círculo tocable
+function pnRestingVisual() { return { ballIdx: 1, ballRow: 'low', keeperIdx: 1, kicked: false, scored: null, animating: false }; }
 let pnVisual = pnRestingVisual();
 
 async function pnLoadState() {
@@ -1274,24 +1276,33 @@ async function pnStart() {
     renderPenalty();
   } catch (e) { toast(e.message); }
 }
-async function pnKick() {
-  if (pnVisual.animating) return;
+// El jugador toca una de las 6 zonas del arco (3 columnas x alto/bajo) para apuntar
+// y patear en un solo gesto. El servidor ya decidió si se ataja o se convierte con
+// /penalty/kick (nunca depende de a dónde apuntó el cliente); acá solo se anima:
+// la pelota vuela al lugar tocado y, según el resultado, el arquero se tira al
+// mismo palo (atajada) o al contrario (gol).
+async function pnKick(zoneIdx) {
+  if (pnVisual.animating || PN.phase !== 'active') return;
+  const col = zoneIdx % 3;
+  const row = zoneIdx < 3 ? 'high' : 'low';
+  pnVisual = { ballIdx: col, ballRow: row, keeperIdx: 1, kicked: true, scored: null, animating: true };
+  renderPenalty(); // la pelota sale volando primero; el arquero todavía no reacciona
   try {
-    pnVisual = { ...pnRestingVisual(), animating: true };
-    renderPenalty();
-    const result = await apiFetch('/penalty/kick', { method: 'POST' });
+    const [result] = await Promise.all([
+      apiFetch('/penalty/kick', { method: 'POST' }),
+      sleep(380), // tiempo mínimo de "vuelo" antes de mostrar si atajó o no
+    ]);
     applyBalanceUpdate(result.balance);
     const scored = result.lastKickResult === 'scored';
-    const ballIdx = Math.floor(Math.random() * 3);
     let keeperIdx;
     if (scored) {
-      const options = [0, 1, 2].filter((p) => p !== ballIdx);
+      const options = [0, 1, 2].filter((c) => c !== col);
       keeperIdx = options[Math.floor(Math.random() * options.length)];
     } else {
-      keeperIdx = ballIdx; // el arquero adivina el palo y ataja
+      keeperIdx = col; // el arquero adivinó el palo y ataja
     }
     PN = result;
-    pnVisual = { ballIdx, keeperIdx, kicked: true, scored, animating: true };
+    pnVisual = { ballIdx: col, ballRow: row, keeperIdx, kicked: true, scored, animating: true };
     renderPenalty();
     await sleep(1000);
     pnVisual = { ...pnVisual, kicked: false, animating: false };
@@ -1332,16 +1343,35 @@ function renderPenalty() {
     b.classList.toggle('active', b.dataset.diff === pnSelectedDifficulty);
   });
 
-  const ballLeft = PN_POSITIONS[pnVisual.ballIdx];
-  const keeperLeft = PN_POSITIONS[pnVisual.keeperIdx];
-  const ballBottom = pnVisual.kicked ? '124px' : '6px';
-  let resultBanner = '';
+  const ballLeft = PN_COLS[pnVisual.ballIdx];
+  const keeperLeft = PN_COLS[pnVisual.keeperIdx];
+  const ballBottom = pnVisual.kicked ? PN_ROW_BALL_BOTTOM[pnVisual.ballRow || 'low'] + 'px' : '6px';
+  let keeperDiveCls = '';
   if (pnVisual.kicked) {
+    if (pnVisual.keeperIdx === 0) keeperDiveCls = ' dive-left';
+    else if (pnVisual.keeperIdx === 2) keeperDiveCls = ' dive-right';
+  }
+  let resultBanner = '';
+  if (pnVisual.kicked && pnVisual.scored !== null) {
     resultBanner = pnVisual.scored
       ? `<div class="pn-goal-result pn-scored">¡GOL!</div>`
       : `<div class="pn-goal-result pn-missed">¡ATAJADA!</div>`;
   }
-  let html = `<div class="pn-goal">${resultBanner}<div class="pn-keeper" style="left:${keeperLeft};"></div><div class="pn-ball" style="left:${ballLeft};bottom:${ballBottom};"></div></div>`;
+  // mientras hay una tanda activa y no se está resolviendo un pateo, se pueden tocar
+  // las 6 zonas del arco (3 columnas x alto/bajo) para apuntar y patear.
+  let zonesHtml = '';
+  if (active && !pnVisual.animating) {
+    const zones = [];
+    ['high', 'low'].forEach((row, rIdx) => {
+      PN_COLS.forEach((leftPct, cIdx) => {
+        const zoneIdx = rIdx * 3 + cIdx;
+        zones.push(`<div class="pn-zone" style="left:${leftPct};bottom:${PN_ROW_ZONE_BOTTOM[row]}px;" onclick="pnKick(${zoneIdx})"><span class="pn-zone-dot"></span></div>`);
+      });
+    });
+    zonesHtml = zones.join('');
+  }
+  let html = `<div class="pn-goal">${resultBanner}<div class="pn-keeper${keeperDiveCls}" style="left:${keeperLeft};"></div><div class="pn-ball" style="left:${ballLeft};bottom:${ballBottom};"></div>${zonesHtml}</div>`;
+  if (active && !pnVisual.animating) html += `<div class="pn-hint">Tocá una zona del arco para patear</div>`;
 
   if (!PN.ladder || PN.ladder.length === 0) {
     html += `<div class="empty">${icon('ball', 26)}Elegí la dificultad y cuánto apostar, y tocá "Empezar".</div>`;
@@ -1362,9 +1392,7 @@ function renderPenalty() {
   stakeInput.disabled = active;
   actionsBox.style.display = active ? 'flex' : 'none';
   if (active) {
-    const kickBtn = actionsBox.querySelector('button:not(.bj-secondary)');
     const cashoutBtn = actionsBox.querySelector('.bj-secondary');
-    if (kickBtn) kickBtn.disabled = pnVisual.animating;
     if (cashoutBtn) cashoutBtn.disabled = PN.round === 0 || pnVisual.animating;
   }
 }
