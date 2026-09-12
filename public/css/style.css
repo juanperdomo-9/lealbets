@@ -563,24 +563,33 @@ section.active{display:block;animation:fadeIn .25s ease;}
   opacity:.5;
 }
 .pn-keeper{
-  position:absolute; bottom:0; width:38px; height:52px; margin-left:-19px;
-  background:linear-gradient(160deg, var(--gold), var(--gold-2)); border-radius:8px 8px 3px 3px;
-  transition:left .3s cubic-bezier(.34,1.3,.4,1), transform .3s cubic-bezier(.34,1.3,.4,1);
-  transform-origin:bottom center; z-index:1;
+  position:absolute; bottom:2px; width:52px; height:60px; margin-left:-26px;
+  transition:left .3s cubic-bezier(.34,1.3,.4,1);
+  z-index:1; filter:drop-shadow(0 3px 4px rgba(0,0,0,.4));
 }
-.pn-keeper::before{
-  content:''; position:absolute; top:-14px; left:50%; transform:translateX(-50%);
-  width:18px; height:18px; border-radius:50%; background:var(--gold-2);
-}
-.pn-keeper.dive-left{transform:rotate(-32deg) translateX(-4px);}
-.pn-keeper.dive-right{transform:rotate(32deg) translateX(4px);}
+.pn-keeper svg{width:100%;height:100%;display:block;overflow:visible;}
+.pn-keeper.idle{animation:pnKeeperBounce 1.7s ease-in-out infinite;}
+@keyframes pnKeeperBounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-3px);}}
+.pn-goal-result{transition:opacity .15s ease;}
 .pn-ball{
   position:absolute; width:20px; height:20px; margin-left:-10px; border-radius:50%;
   background:radial-gradient(circle at 35% 30%, #fff, #cfcfcf 70%);
+  background-image:radial-gradient(circle at 35% 30%, #fff, #cfcfcf 70%),
+    linear-gradient(#222 1px, transparent 1px), linear-gradient(90deg, #222 1px, transparent 1px);
+  background-size:100% 100%, 100% 34%, 34% 100%;
+  background-position:center, center, center;
   box-shadow:0 2px 6px rgba(0,0,0,.4);
   transition:left .4s ease, bottom .4s ease;
   z-index:2;
 }
+.pn-ball.flying{animation:pnBallSpin .35s linear infinite;}
+@keyframes pnBallSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+.pn-net-ripple{
+  position:absolute; width:26px; height:26px; margin-left:-13px;
+  border-radius:50%; border:2px solid var(--green-win); z-index:2; pointer-events:none;
+  animation:pnRipple .6s ease-out forwards;
+}
+@keyframes pnRipple{from{transform:scale(.4);opacity:.9;}to{transform:scale(2.2);opacity:0;}}
 .pn-zone{
   position:absolute; width:42px; height:42px; margin-left:-21px;
   border-radius:50%; border:2px dashed rgba(255,255,255,.4); background:rgba(255,255,255,.05);

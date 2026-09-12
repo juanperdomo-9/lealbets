@@ -1250,6 +1250,33 @@ const PN_ROW_ZONE_BOTTOM = { high: 106, low: 38 }; // dónde se dibuja el círcu
 function pnRestingVisual() { return { ballIdx: 1, ballRow: 'low', keeperIdx: 1, kicked: false, scored: null, animating: false }; }
 let pnVisual = pnRestingVisual();
 
+// arquero dibujado en SVG (cuerpo humano real, no un rectángulo): la misma silueta
+// se usa para las 3 posturas, solo cambia la transformación del grupo del cuerpo
+// (parado en guardia, tirado a un palo, o achicándose al medio).
+function pnKeeperMarkup(mode) {
+  let bodyTransform = '';
+  if (mode === 'dive-left') bodyTransform = 'rotate(-78 50 66) translate(-4 10)';
+  else if (mode === 'dive-right') bodyTransform = 'rotate(78 50 66) translate(4 10)';
+  else if (mode === 'block') bodyTransform = 'translate(0 4) scale(1.04)';
+  return `<svg viewBox="0 0 100 100">
+    <ellipse cx="50" cy="97" rx="16" ry="3" fill="rgba(0,0,0,.35)"/>
+    <g transform="${bodyTransform}">
+      <rect x="38" y="60" width="10" height="28" rx="5" fill="#1c1c1c"/>
+      <rect x="52" y="60" width="10" height="28" rx="5" fill="#1c1c1c"/>
+      <rect x="35" y="85" width="14" height="7" rx="3" fill="#0c0c0c"/>
+      <rect x="51" y="85" width="14" height="7" rx="3" fill="#0c0c0c"/>
+      <rect x="32" y="32" width="36" height="32" rx="12" fill="#ff7a3d"/>
+      <rect x="32" y="32" width="36" height="9" rx="4" fill="#ffb37a"/>
+      <rect x="14" y="12" width="12" height="34" rx="6" fill="#ff7a3d" transform="rotate(-30 20 29)"/>
+      <rect x="74" y="12" width="12" height="34" rx="6" fill="#ff7a3d" transform="rotate(30 80 29)"/>
+      <circle cx="14" cy="14" r="8" fill="#fff"/>
+      <circle cx="86" cy="14" r="8" fill="#fff"/>
+      <circle cx="50" cy="19" r="13" fill="#e8a978"/>
+      <path d="M37 15a13 13 0 0 1 26 0" fill="#241a12"/>
+    </g>
+  </svg>`;
+}
+
 async function pnLoadState() {
   if (!ME) { renderPenalty(); return; }
   try { PN = await apiFetch('/penalty/state'); } catch (e) { /* ignorar, se reintenta solo */ }
@@ -1305,7 +1332,7 @@ async function pnKick(zoneIdx) {
     pnVisual = { ballIdx: col, ballRow: row, keeperIdx, kicked: true, scored, animating: true };
     renderPenalty();
     await sleep(1000);
-    pnVisual = { ...pnVisual, kicked: false, animating: false };
+    pnVisual = pnRestingVisual(); // pelota y arquero vuelven al centro, listos para el próximo pateo
     renderPenalty();
   } catch (e) {
     pnVisual = pnRestingVisual();
@@ -1345,17 +1372,30 @@ function renderPenalty() {
 
   const ballLeft = PN_COLS[pnVisual.ballIdx];
   const keeperLeft = PN_COLS[pnVisual.keeperIdx];
+  const revealed = pnVisual.kicked && pnVisual.scored !== null;
+  const ballFlying = pnVisual.kicked && pnVisual.scored === null; // en el aire, todavía no se sabe el resultado
   const ballBottom = pnVisual.kicked ? PN_ROW_BALL_BOTTOM[pnVisual.ballRow || 'low'] + 'px' : '6px';
-  let keeperDiveCls = '';
-  if (pnVisual.kicked) {
-    if (pnVisual.keeperIdx === 0) keeperDiveCls = ' dive-left';
-    else if (pnVisual.keeperIdx === 2) keeperDiveCls = ' dive-right';
+
+  // el arquero: parado en guardia (con un pequeño rebote) mientras espera o
+  // mientras la pelota sigue en el aire; recién se tira una vez que se revela
+  // el resultado real que ya decidió el servidor.
+  let keeperMode = 'idle';
+  let keeperWrapperCls = 'pn-keeper';
+  if (revealed) {
+    if (pnVisual.keeperIdx === 0) keeperMode = 'dive-left';
+    else if (pnVisual.keeperIdx === 2) keeperMode = 'dive-right';
+    else keeperMode = 'block';
+  } else {
+    keeperWrapperCls += ' idle';
   }
+
   let resultBanner = '';
-  if (pnVisual.kicked && pnVisual.scored !== null) {
+  let rippleHtml = '';
+  if (revealed) {
     resultBanner = pnVisual.scored
       ? `<div class="pn-goal-result pn-scored">¡GOL!</div>`
       : `<div class="pn-goal-result pn-missed">¡ATAJADA!</div>`;
+    if (pnVisual.scored) rippleHtml = `<div class="pn-net-ripple" style="left:${ballLeft};bottom:${ballBottom};"></div>`;
   }
   // mientras hay una tanda activa y no se está resolviendo un pateo, se pueden tocar
   // las 6 zonas del arco (3 columnas x alto/bajo) para apuntar y patear.
@@ -1370,7 +1410,9 @@ function renderPenalty() {
     });
     zonesHtml = zones.join('');
   }
-  let html = `<div class="pn-goal">${resultBanner}<div class="pn-keeper${keeperDiveCls}" style="left:${keeperLeft};"></div><div class="pn-ball" style="left:${ballLeft};bottom:${ballBottom};"></div>${zonesHtml}</div>`;
+  const keeperHtml = `<div class="${keeperWrapperCls}" style="left:${keeperLeft};">${pnKeeperMarkup(keeperMode)}</div>`;
+  const ballHtml = `<div class="pn-ball${ballFlying ? ' flying' : ''}" style="left:${ballLeft};bottom:${ballBottom};"></div>`;
+  let html = `<div class="pn-goal">${resultBanner}${keeperHtml}${ballHtml}${rippleHtml}${zonesHtml}</div>`;
   if (active && !pnVisual.animating) html += `<div class="pn-hint">Tocá una zona del arco para patear</div>`;
 
   if (!PN.ladder || PN.ladder.length === 0) {
