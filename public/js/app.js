@@ -247,6 +247,26 @@ async function loadMyBets() {
   MY_BETS = await apiFetch('/bets/mine');
 }
 
+// ---------- admin: cargar fichas ----------
+function onChipsUserChange() {
+  const name = document.getElementById('chipsUserSelect').value;
+  const row = STATE.ranking.find((r) => r.name === name);
+  document.getElementById('chipsCurrentBalance').textContent = row ? `Saldo actual: ${Math.round(row.balance)} fichas` : '';
+}
+async function adjustUserChips() {
+  const name = document.getElementById('chipsUserSelect').value;
+  const amount = parseInt(document.getElementById('chipsAmount').value, 10);
+  if (!name) { toast('Elegí un jugador'); return; }
+  if (!amount) { toast('Poné una cantidad distinta de cero'); return; }
+  try {
+    const result = await apiFetch(`/admin/users/${encodeURIComponent(name)}/chips`, { method: 'POST', admin: true, body: { amount } });
+    document.getElementById('chipsAmount').value = '';
+    await loadState();
+    renderAll();
+    toast(`Listo: ${name} ahora tiene ${Math.round(result.balance)} fichas`);
+  } catch (e) { toast(e.message); }
+}
+
 // ---------- admin: equipos / partidos ----------
 async function addTeam() {
   const input = document.getElementById('newTeamName');
@@ -719,6 +739,15 @@ function renderPlayerStatsForm() {
 }
 
 function renderAdmin() {
+  const chipsSel = document.getElementById('chipsUserSelect');
+  const previousChipsSelection = chipsSel.value;
+  const users = STATE.ranking.slice().sort((a, b) => a.name.localeCompare(b.name));
+  chipsSel.innerHTML = users.length
+    ? users.map((u) => `<option value="${u.name}">${u.name}</option>`).join('')
+    : '<option value="">Todavía no hay jugadores</option>';
+  if (users.some((u) => u.name === previousChipsSelection)) chipsSel.value = previousChipsSelection;
+  onChipsUserChange();
+
   const teamsList = document.getElementById('teamsList');
   teamsList.innerHTML = STATE.teams.length
     ? STATE.teams.slice().sort((a, b) => b.rating - a.rating).map((t) =>

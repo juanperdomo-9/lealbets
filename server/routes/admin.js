@@ -12,6 +12,27 @@ function httpErr(status, message) {
   return Object.assign(new Error(message), { status });
 }
 
+// Cargar (o quitar, con un número negativo) fichas a un jugador a mano.
+router.post('/users/:name/chips', async (req, res) => {
+  try {
+    const name = req.params.name;
+    const amount = Number(req.body.amount);
+    if (!Number.isFinite(amount) || amount === 0) {
+      return res.status(400).json({ error: 'Poné una cantidad de fichas válida (distinta de cero)' });
+    }
+    const { rows } = await pool.query(
+      'UPDATE users SET balance = GREATEST(balance + $1, 0) WHERE name=$2 RETURNING balance',
+      [amount, name]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+    broadcastStateUpdate();
+    res.json({ ok: true, balance: Number(rows[0].balance) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 router.post('/teams', async (req, res) => {
   try {
     const name = String(req.body.name || '').trim();

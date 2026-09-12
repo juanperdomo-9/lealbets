@@ -83,6 +83,16 @@
       </div>
       <div id="adminContent" style="display:none;">
       <div class="card">
+        <h3>Cargar fichas</h3>
+        <label>Jugador</label>
+        <select id="chipsUserSelect" onchange="onChipsUserChange()"></select>
+        <div class="field-hint" id="chipsCurrentBalance"></div>
+        <label>Fichas a agregar (poné un número negativo para restar)</label>
+        <input id="chipsAmount" type="number" step="1" placeholder="Ej: 5000 o -2000">
+        <button onclick="adjustUserChips()">Agregar fichas</button>
+      </div>
+
+      <div class="card">
         <h3>Agregar equipo</h3>
         <label>Nombre del equipo</label>
         <input id="newTeamName" type="text" placeholder="Ej: Deportivo Asado">
