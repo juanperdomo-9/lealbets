@@ -102,6 +102,13 @@ const LEAL_PROPS = {
   },
 };
 
+// Orden en el que se muestran los jugadores de Leal FC en la web (el mismo
+// en el que se cargó la lista). No alcanza con el orden de las claves del
+// objeto LEAL_PROPS: al guardarse como jsonb en Postgres y volver a leerse,
+// Postgres NO garantiza conservar el orden de las claves — por eso el orden
+// de exhibición se guarda acá aparte y se manda explícito al frontend.
+const LEAL_PLAYER_ORDER = Object.keys(LEAL_PROPS);
+
 const SEED_TEAMS = [
   { name: 'Canilla Libre', pts: 10, gd: 6 },
   { name: 'Leal FC', pts: 10, gd: 4 },
@@ -125,4 +132,4 @@ function seedRating(team) {
   return Math.round(1500 + (team.pts - avgPts) * 25 + team.gd * 10);
 }
 
-module.exports = { LEAL_TEAM_NAME, LEAL_PROPS, SEED_TEAMS, SEED_FIXTURE, seedRating };
+module.exports = { LEAL_TEAM_NAME, LEAL_PROPS, LEAL_PLAYER_ORDER, SEED_TEAMS, SEED_FIXTURE, seedRating };

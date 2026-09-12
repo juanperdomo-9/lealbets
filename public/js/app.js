@@ -6,7 +6,7 @@ let TOKEN = null;
 let ADMIN_TOKEN = null;
 let ME = null;
 let isAdmin = false;
-let STATE = { teams: [], matches: [], ranking: [] };
+let STATE = { teams: [], matches: [], ranking: [], lealPlayerOrder: [] };
 let MY_BETS = [];
 let CART = [];
 let cartPanelOpen = false;
@@ -101,6 +101,16 @@ function oddsFor(m, pick) {
 }
 function sel(m, pick) {
   return CART.some((l) => l.matchId === m.id && l.pick === pick) ? ' selected' : '';
+}
+// El orden de las claves de un objeto que pasó por jsonb en Postgres no está
+// garantizado, así que el orden de exhibición de los jugadores de Leal viaja
+// aparte (STATE.lealPlayerOrder) y se aplica acá siempre que se recorren.
+function orderedPlayerNames(playerProps) {
+  const names = Object.keys(playerProps || {});
+  const order = STATE.lealPlayerOrder || [];
+  const known = order.filter((n) => names.includes(n));
+  const unknown = names.filter((n) => !order.includes(n));
+  return known.concat(unknown);
 }
 
 // ---------- auth ----------
@@ -351,7 +361,7 @@ function renderPlayerPropsBlock(m) {
     ['gol', 'Gol'], ['asistencia', 'Asistencia'], ['amarilla', 'Amarilla'], ['roja', 'Roja'],
   ];
   let html = `<div class="market-label">Jugadores de LEAL</div>`;
-  for (const playerName in m.playerProps) {
+  for (const playerName of orderedPlayerNames(m.playerProps)) {
     const props = m.playerProps[playerName];
     html += `<div class="player-props"><div class="player-props-name">${playerName}</div>`;
     for (const [market, label] of THRESHOLD_MARKETS) {
@@ -504,7 +514,7 @@ function renderPlayerStatsForm() {
     ['gol', 'Goles'], ['asistencia', 'Asistencias'],
   ];
   let html = '';
-  for (const playerName in match.playerProps) {
+  for (const playerName of orderedPlayerNames(match.playerProps)) {
     const props = match.playerProps[playerName];
     html += `<div class="stat-player"><div class="stat-player-name">${playerName}</div><div class="stat-grid">`;
     for (const [market, label] of COUNT_MARKETS) {

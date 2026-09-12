@@ -1,5 +1,5 @@
 const { pool } = require('./db');
-const { LEAL_TEAM_NAME, LEAL_PROPS } = require('./lealProps');
+const { LEAL_TEAM_NAME, LEAL_PROPS, LEAL_PLAYER_ORDER } = require('./lealProps');
 const { buildDynamicLealProps } = require('./oddsEngine');
 
 function rowToMatch(r) {
@@ -65,7 +65,7 @@ async function syncLealProps(client = pool) {
 
 async function getPublicState() {
   const [teams, matches, ranking] = await Promise.all([loadTeams(), loadMatches(), loadRanking()]);
-  return { teams, matches, ranking };
+  return { teams, matches, ranking, lealPlayerOrder: LEAL_PLAYER_ORDER };
 }
 
 module.exports = {

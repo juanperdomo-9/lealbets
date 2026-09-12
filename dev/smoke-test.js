@@ -38,6 +38,10 @@ async function api(path, { method = 'GET', body, token } = {}) {
   assert(state.matches.length === 4, 'seed: 4 partidos');
   const lealMatch = state.matches.find((m) => m.homeName === 'Leal FC' || m.awayName === 'Leal FC');
   assert(!!lealMatch && !!lealMatch.playerProps, 'el partido de Leal FC tiene playerProps');
+  assert(
+    Array.isArray(state.lealPlayerOrder) && state.lealPlayerOrder[0] === 'Alexis Villarreal' && state.lealPlayerOrder[1] === 'Luca Forteis',
+    'el estado expone el orden fijo de jugadores de Leal (para que no lo desordene jsonb)'
+  );
   const juanPerdomoProps = lealMatch.playerProps['Juan Perdomo'];
   assert(juanPerdomoProps && juanPerdomoProps.gol === 40, 'cuota base de "Juan Perdomo gol" = 40 (sin historial)');
 
