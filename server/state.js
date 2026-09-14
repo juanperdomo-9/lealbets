@@ -97,12 +97,20 @@ async function loadActiveSuperBoosts(client = pool) {
 }
 
 function rowToLealResult(r) {
+  const scorersDetail = r.scorers_detail || [];
+  // el texto "Juan Perdomo x2, Pedro Diaz" para mostrar se arma siempre desde
+  // scorers_detail (nombre + goles estructurado), que es lo que además permite
+  // armar la tabla de goleadores agregada en el cliente.
+  const scorersText = scorersDetail.length
+    ? scorersDetail.map((s) => (s.goals > 1 ? `${s.name} x${s.goals}` : s.name)).join(', ')
+    : (r.scorers || '');
   return {
     id: r.id,
     opponent: r.opponent,
     lealGoals: r.leal_goals,
     opponentGoals: r.opponent_goals,
-    scorers: r.scorers || '',
+    scorers: scorersText,
+    scorersDetail,
     playedOn: r.played_on || '',
     createdBy: r.created_by,
     createdAt: Number(r.created_at),

@@ -142,32 +142,49 @@
     </section>
 
     <section id="tab-historial">
-      <p class="leal-history-hint">Tocá un equipo para ver todos los partidos que jugó Leal contra ellos, con resultado y goleadores.</p>
-
-      <div class="card" id="lealHistoryAddForm" style="display:none;">
-        <h3>Agregar resultado</h3>
-        <label>Rival</label>
-        <input id="lhOpponentInput" type="text" list="lhTeamSuggestions" placeholder="Ej: Canilla Libre" maxlength="60">
-        <datalist id="lhTeamSuggestions"></datalist>
-
-        <label>Marcador (Leal FC primero)</label>
-        <div class="result-inline">
-          <input id="lhLealGoals" type="number" min="0" placeholder="Leal">
-          <span class="dash">–</span>
-          <input id="lhOpponentGoals" type="number" min="0" placeholder="Rival">
-        </div>
-
-        <label>Goleadores de Leal (opcional)</label>
-        <input id="lhScorersInput" type="text" placeholder="Ej: Juan Perdomo x2, Pedro Diaz" maxlength="300">
-
-        <label>Fecha (opcional)</label>
-        <input id="lhPlayedOnInput" type="text" placeholder="Ej: 12/09/2026" maxlength="40">
-
-        <button onclick="addLealResult()">Agregar resultado</button>
+      <div class="subtabs" id="historialSubtabs">
+        <button data-view="teams" class="active" onclick="setHistorialView('teams')">Por rival</button>
+        <button data-view="scorers" onclick="setHistorialView('scorers')">Goleadores</button>
       </div>
 
-      <div class="card leal-history-card">
-        <div id="lealHistoryList"></div>
+      <div id="historial-teams" class="historial-view active">
+        <div class="card leal-overall-record" id="lealOverallRecord"></div>
+
+        <p class="leal-history-hint">Tocá un equipo para ver todos los partidos que jugó Leal contra ellos, con resultado y goleadores.</p>
+
+        <div class="card" id="lealHistoryAddForm" style="display:none;">
+          <h3>Agregar resultado</h3>
+          <label>Rival</label>
+          <input id="lhOpponentInput" type="text" list="lhTeamSuggestions" placeholder="Ej: Canilla Libre" maxlength="60">
+          <datalist id="lhTeamSuggestions"></datalist>
+
+          <label>Marcador (Leal FC primero)</label>
+          <div class="result-inline">
+            <input id="lhLealGoals" type="number" min="0" placeholder="Leal">
+            <span class="dash">–</span>
+            <input id="lhOpponentGoals" type="number" min="0" placeholder="Rival">
+          </div>
+
+          <label>Goleadores de Leal (opcional)</label>
+          <div id="lhScorersRows"></div>
+          <button type="button" class="scorer-add-btn" onclick="addScorerRow()">+ Agregar goleador</button>
+
+          <label style="margin-top:14px;">Fecha (opcional)</label>
+          <input id="lhPlayedOnInput" type="text" placeholder="Ej: 12/09/2026" maxlength="40">
+
+          <button onclick="addLealResult()">Agregar resultado</button>
+        </div>
+
+        <div class="card leal-history-card">
+          <div id="lealHistoryList"></div>
+        </div>
+      </div>
+
+      <div id="historial-scorers" class="historial-view">
+        <p class="leal-history-hint">Se arma sola con los goleadores de todos los partidos cargados.</p>
+        <div class="card leal-history-card">
+          <div id="topScorersList"></div>
+        </div>
       </div>
     </section>
 

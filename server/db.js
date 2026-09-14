@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS leal_results (
   leal_goals INTEGER NOT NULL,
   opponent_goals INTEGER NOT NULL,
   scorers TEXT,
+  scorers_detail JSONB NOT NULL DEFAULT '[]',
   played_on TEXT,
   created_by TEXT,
   created_at BIGINT NOT NULL
@@ -117,6 +118,7 @@ const MIGRATIONS = `
 ALTER TABLE bets ADD COLUMN IF NOT EXISTS super_boost_id TEXT REFERENCES super_boosts(id);
 ALTER TABLE matches ADD COLUMN IF NOT EXISTS pre_match_ratings JSONB;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS can_log_leal_history BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE leal_results ADD COLUMN IF NOT EXISTS scorers_detail JSONB NOT NULL DEFAULT '[]';
 `;
 
 async function initSchema() {

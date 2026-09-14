@@ -353,6 +353,19 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .finished-stat-row small{color:var(--chalk-faint);font-size:11.5px;flex:1;text-align:right;}
 
 /* ---------------------------------- pestaña: historial de Leal FC ---------------------------------- */
+.leal-overall-record:empty{display:none;padding:0;margin:0;border:none;}
+.leal-overall-title{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--chalk);margin-bottom:14px;}
+.leal-overall-title .crest{width:32px;height:32px;font-size:11px;}
+.leal-overall-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.leal-overall-stat{
+  text-align:center;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm);
+  padding:12px 4px;
+}
+.leal-overall-stat b{display:block;font-family:var(--font-display);font-size:22px;font-weight:700;margin-bottom:3px;}
+.leal-overall-stat span{font-size:10.5px;color:var(--chalk-faint);text-transform:uppercase;letter-spacing:.3px;}
+.leal-overall-stat.win b{color:var(--green-win);}
+.leal-overall-stat.draw b{color:var(--chalk-dim);}
+.leal-overall-stat.loss b{color:var(--red);}
 .leal-history-hint{font-size:11.5px;color:var(--chalk-faint);margin:2px 2px 14px;line-height:1.5;}
 .leal-history-card{padding-top:6px;padding-bottom:6px;}
 .history-team{border-top:1px solid var(--border-soft);}
@@ -385,6 +398,55 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .history-match-score b{font-family:var(--font-display);color:var(--gold);}
 .history-match-scorers{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--chalk-dim);}
 .history-match-scorers .icon{color:var(--gold-2);flex:none;}
+.historial-view{display:none;}
+.historial-view.active{display:block;}
+.history-match-editing{padding:12px 0;}
+.history-match-editing label{font-size:11px;color:var(--chalk-dim);display:block;margin:10px 0 6px;font-weight:500;}
+.history-match-editing label:first-child{margin-top:0;}
+.history-match-editing input{
+  width:100%;background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--radius-sm);
+  color:var(--chalk);padding:9px 11px;font-size:13px;font-family:var(--font-body);margin-bottom:0;
+}
+.scorer-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+.scorer-row .scorerName{flex:1;min-width:0;}
+.scorer-row .scorerGoals{width:56px;flex:none;text-align:center;}
+/* ".card button" pisa cualquier botón de menor especificidad anidado adentro
+   (mismo bug que ya pasó con ".subtabs button" y ".deactivate-btn"): estos
+   viven dentro de .leal-history-card / #lealHistoryAddForm, así que hay que
+   reforzarlos explícitamente con el prefijo .card para ganarle. */
+.card .scorer-remove{
+  width:30px;height:30px;flex:none;border-radius:50%;border:1px solid var(--border-soft);
+  background:var(--surface-2);color:var(--chalk-faint);cursor:pointer;box-shadow:none;
+  display:flex;align-items:center;justify-content:center;padding:0;
+}
+.card .scorer-remove:hover{color:var(--red);border-color:var(--red);}
+.card .scorer-add-btn{
+  width:100%;background:none;border:1px dashed var(--border-soft);color:var(--gold-2);box-shadow:none;
+  padding:9px;border-radius:var(--radius-sm);font-family:var(--font-body);font-size:12.5px;font-weight:600;
+  cursor:pointer;margin-bottom:12px;
+}
+.card .scorer-add-btn:hover{border-color:var(--gold-2);}
+.card .row2 .reopen-btn{background:none;color:var(--chalk-dim);border:1px solid var(--border);box-shadow:none;}
+.card .row2 .primary-btn{background:linear-gradient(160deg, var(--gold), var(--gold-2));color:var(--ink);box-shadow:var(--shadow-gold);}
+
+/* ---------------------------------- tabla de goleadores ---------------------------------- */
+.scorer-rank-row{
+  display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--border-soft);
+}
+.scorer-rank-row:last-child{border-bottom:none;}
+.scorer-rank-row.top .scorer-rank-pos{
+  background:linear-gradient(160deg, var(--gold), var(--gold-2));color:var(--ink);
+}
+.scorer-rank-pos{
+  width:24px;height:24px;border-radius:50%;flex:none;background:var(--surface-2);color:var(--chalk-dim);
+  display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:11.5px;
+}
+.scorer-rank-name{flex:1;min-width:0;font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--chalk);}
+.scorer-rank-name small{display:block;font-family:var(--font-body);font-size:10.5px;color:var(--chalk-faint);font-weight:400;margin-top:2px;}
+.scorer-rank-goals{
+  flex:none;display:flex;align-items:center;gap:5px;font-family:var(--font-display);font-weight:700;font-size:15px;color:var(--gold);
+}
+.scorer-rank-goals .icon{color:var(--gold-2);}
 
 /* ---------------------------------- bet slip / cart ---------------------------------- */
 .slip{margin-top:14px;border-top:1px solid var(--border-soft);padding-top:14px;}

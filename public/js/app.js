@@ -704,6 +704,21 @@ function lealHistoryRecordFor(entries) {
   }
   return { w, d, l };
 }
+function renderLealOverallRecord() {
+  const container = document.getElementById('lealOverallRecord');
+  if (!container) return;
+  const results = STATE.lealResults || [];
+  if (results.length === 0) { container.innerHTML = ''; return; }
+  const { w, d, l } = lealHistoryRecordFor(results);
+  container.innerHTML = `
+    <div class="leal-overall-title">${crestHtml(LEAL_TEAM_NAME)}<span>Leal FC — histórico</span></div>
+    <div class="leal-overall-stats">
+      <div class="leal-overall-stat win"><b>${w}</b><span>Ganados</span></div>
+      <div class="leal-overall-stat draw"><b>${d}</b><span>Empatados</span></div>
+      <div class="leal-overall-stat loss"><b>${l}</b><span>Perdidos</span></div>
+    </div>
+  `;
+}
 function toggleHistoryTeam(key) {
   if (expandedHistoryTeams.has(key)) expandedHistoryTeams.delete(key);
   else expandedHistoryTeams.add(key);
@@ -717,12 +732,35 @@ function populateLealHistoryTeamSuggestions() {
     .map((t) => `<option value="${t.name}">`)
     .join('');
 }
+
+// ---------- filas de goleadores (nombre + goles), reusadas para agregar y editar ----------
+function scorerRowHtml(name, goals) {
+  const safeName = (name || '').replace(/"/g, '&quot;');
+  return `<div class="scorer-row">
+    <input type="text" class="scorerName" placeholder="Nombre" maxlength="60" value="${safeName}">
+    <input type="number" class="scorerGoals" min="1" value="${goals || 1}">
+    <button type="button" class="scorer-remove" onclick="this.parentElement.remove()">${icon('close', 11)}</button>
+  </div>`;
+}
+function addScorerRow(containerId, name, goals) {
+  const container = document.getElementById(containerId || 'lhScorersRows');
+  if (!container) return;
+  container.insertAdjacentHTML('beforeend', scorerRowHtml(name, goals));
+}
+function collectScorerRows(containerId) {
+  return Array.from(document.querySelectorAll(`#${containerId} .scorer-row`))
+    .map((row) => ({
+      name: row.querySelector('.scorerName').value.trim(),
+      goals: parseInt(row.querySelector('.scorerGoals').value, 10) || 1,
+    }))
+    .filter((s) => s.name);
+}
+
 async function addLealResult() {
   if (!ME) { toast('Entrá con tu usuario para cargar un resultado'); return; }
   const opponentInput = document.getElementById('lhOpponentInput');
   const lealGoalsInput = document.getElementById('lhLealGoals');
   const opponentGoalsInput = document.getElementById('lhOpponentGoals');
-  const scorersInput = document.getElementById('lhScorersInput');
   const playedOnInput = document.getElementById('lhPlayedOnInput');
   const opponent = opponentInput.value.trim();
   const lealGoals = parseInt(lealGoalsInput.value, 10);
@@ -731,13 +769,15 @@ async function addLealResult() {
   if (!Number.isInteger(lealGoals) || lealGoals < 0 || !Number.isInteger(opponentGoals) || opponentGoals < 0) {
     toast('Cargá un marcador válido'); return;
   }
+  const scorers = collectScorerRows('lhScorersRows');
   try {
     await apiFetch('/leal-history', {
       method: 'POST',
-      body: { opponent, lealGoals, opponentGoals, scorers: scorersInput.value.trim(), playedOn: playedOnInput.value.trim() },
+      body: { opponent, lealGoals, opponentGoals, scorers, playedOn: playedOnInput.value.trim() },
     });
-    opponentInput.value = ''; lealGoalsInput.value = ''; opponentGoalsInput.value = '';
-    scorersInput.value = ''; playedOnInput.value = '';
+    opponentInput.value = ''; lealGoalsInput.value = ''; opponentGoalsInput.value = ''; playedOnInput.value = '';
+    document.getElementById('lhScorersRows').innerHTML = '';
+    addScorerRow('lhScorersRows');
     await loadState();
     renderAll();
     toast('Resultado agregado al historial');
@@ -751,10 +791,71 @@ async function deleteLealResult(id) {
     toast('Resultado borrado');
   } catch (e) { toast(e.message); }
 }
+
+let editingLealResultId = null;
+function startEditLealResult(id) {
+  editingLealResultId = id;
+  renderLealHistory();
+}
+function cancelEditLealResult() {
+  editingLealResultId = null;
+  renderLealHistory();
+}
+async function saveLealResultEdit(id) {
+  const opponent = document.getElementById(`editLhOpponent-${id}`).value.trim();
+  const lealGoals = parseInt(document.getElementById(`editLhLealGoals-${id}`).value, 10);
+  const opponentGoals = parseInt(document.getElementById(`editLhOpponentGoals-${id}`).value, 10);
+  const playedOn = document.getElementById(`editLhPlayedOn-${id}`).value.trim();
+  if (!opponent) { toast('Poné contra qué equipo jugó Leal'); return; }
+  if (!Number.isInteger(lealGoals) || lealGoals < 0 || !Number.isInteger(opponentGoals) || opponentGoals < 0) {
+    toast('Cargá un marcador válido'); return;
+  }
+  const scorers = collectScorerRows(`editLhScorers-${id}`);
+  try {
+    await apiFetch(`/leal-history/${id}`, { method: 'PUT', admin: true, body: { opponent, lealGoals, opponentGoals, scorers, playedOn } });
+    editingLealResultId = null;
+    await loadState();
+    renderAll();
+    toast('Resultado corregido');
+  } catch (e) { toast(e.message); }
+}
+
+// ---------- tabla de goleadores: se arma sola sumando scorersDetail de todos los partidos ----------
+function renderTopScorers() {
+  const container = document.getElementById('topScorersList');
+  if (!container) return;
+  const results = STATE.lealResults || [];
+  const totals = {}; // key: nombre en minúsculas -> {label, goals, matches}
+  for (const r of results) {
+    for (const s of (r.scorersDetail || [])) {
+      const name = (s.name || '').trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (!totals[key]) totals[key] = { label: name, goals: 0, matches: 0 };
+      totals[key].goals += s.goals;
+      totals[key].matches += 1;
+    }
+  }
+  const rows = Object.values(totals).sort((a, b) => b.goals - a.goals || a.label.localeCompare(b.label));
+  if (rows.length === 0) {
+    container.innerHTML = `<div class="empty">${icon('goal', 26)}Todavía no hay goleadores cargados.</div>`;
+    return;
+  }
+  container.innerHTML = rows.map((r, i) => `
+    <div class="scorer-rank-row${i === 0 ? ' top' : ''}">
+      <div class="scorer-rank-pos">${i + 1}</div>
+      <div class="scorer-rank-name">${r.label}<small>${r.matches} partido${r.matches === 1 ? '' : 's'} convirtiendo</small></div>
+      <div class="scorer-rank-goals">${icon('goal', 13)}${r.goals}</div>
+    </div>
+  `).join('');
+}
+
 function renderLealHistory() {
   const container = document.getElementById('lealHistoryList');
   if (!container) return;
   populateLealHistoryTeamSuggestions();
+  renderTopScorers();
+  renderLealOverallRecord();
 
   // solo puede cargar un resultado quien el admin haya habilitado puntualmente
   // (users.can_log_leal_history); todos pueden ver el historial igual. Si no
@@ -764,6 +865,10 @@ function renderLealHistory() {
   const myEntry = ME ? STATE.ranking.find((r) => r.name === ME) : null;
   const canLog = !!(myEntry && myEntry.canLogLealHistory);
   if (formEl) formEl.style.display = canLog ? 'block' : 'none';
+  // arranca con una fila vacía lista para escribir; si ya tiene filas (el usuario
+  // las está completando) no se tocan en renders sucesivos.
+  const scorersRowsEl = document.getElementById('lhScorersRows');
+  if (scorersRowsEl && canLog && scorersRowsEl.children.length === 0) addScorerRow('lhScorersRows');
 
   const results = STATE.lealResults || [];
   if (results.length === 0) {
@@ -802,14 +907,40 @@ function renderLealHistory() {
     if (isOpen) {
       html += `<div class="history-matches">`;
       for (const r of entries) {
-        html += `<div class="history-match">
-          <div class="history-match-score">
-            <span class="match-id">${r.playedOn || ''}</span>
-            <span>Leal FC <b>${r.lealGoals} – ${r.opponentGoals}</b> ${label}</span>
-          </div>
-          <div class="history-match-scorers">${icon('goal', 13)}${r.scorers || 'Sin goleadores cargados'}</div>
-          ${isAdmin ? `<button class="reopen-btn" style="margin-top:8px;" onclick="deleteLealResult('${r.id}')">${icon('undo', 13)}Borrar</button>` : ''}
-        </div>`;
+        if (isAdmin && editingLealResultId === r.id) {
+          const scorerRows = (r.scorersDetail || []).map((s) => scorerRowHtml(s.name, s.goals)).join('') || scorerRowHtml('', 1);
+          html += `<div class="history-match history-match-editing">
+            <label>Rival</label>
+            <input id="editLhOpponent-${r.id}" type="text" value="${r.opponent.replace(/"/g, '&quot;')}" maxlength="60">
+            <label>Marcador (Leal FC primero)</label>
+            <div class="result-inline">
+              <input id="editLhLealGoals-${r.id}" type="number" min="0" value="${r.lealGoals}">
+              <span class="dash">–</span>
+              <input id="editLhOpponentGoals-${r.id}" type="number" min="0" value="${r.opponentGoals}">
+            </div>
+            <label>Goleadores de Leal</label>
+            <div id="editLhScorers-${r.id}">${scorerRows}</div>
+            <button type="button" class="scorer-add-btn" onclick="addScorerRow('editLhScorers-${r.id}')">+ Agregar goleador</button>
+            <label style="margin-top:14px;">Fecha (opcional)</label>
+            <input id="editLhPlayedOn-${r.id}" type="text" value="${(r.playedOn || '').replace(/"/g, '&quot;')}" maxlength="40">
+            <div class="row2" style="margin-top:12px;">
+              <button class="primary-btn" onclick="saveLealResultEdit('${r.id}')">Guardar cambios</button>
+              <button class="reopen-btn" onclick="cancelEditLealResult()">Cancelar</button>
+            </div>
+          </div>`;
+        } else {
+          html += `<div class="history-match">
+            <div class="history-match-score">
+              <span class="match-id">${r.playedOn || ''}</span>
+              <span>Leal FC <b>${r.lealGoals} – ${r.opponentGoals}</b> ${label}</span>
+            </div>
+            <div class="history-match-scorers">${icon('goal', 13)}${r.scorers || 'Sin goleadores cargados'}</div>
+            ${isAdmin ? `<div class="row2" style="margin-top:8px;">
+              <button class="reopen-btn" onclick="startEditLealResult('${r.id}')">${icon('undo', 13)}Editar</button>
+              <button class="reopen-btn" onclick="deleteLealResult('${r.id}')">${icon('undo', 13)}Borrar</button>
+            </div>` : ''}
+          </div>`;
+        }
       }
       html += `</div>`;
     }
@@ -956,6 +1087,12 @@ function setMatchesView(view) {
   matchesView = view;
   document.querySelectorAll('#matchesSubtabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   renderMatches();
+}
+
+function setHistorialView(view) {
+  document.querySelectorAll('#historialSubtabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.historial-view').forEach((el) => el.classList.toggle('active', el.id === 'historial-' + view));
+  if (view === 'scorers') renderTopScorers();
 }
 
 function renderMyBets() {
@@ -1224,7 +1361,10 @@ function renderAll(skipAdmin) {
     if (!(skipAdmin && editingMatchId)) renderMatches();
     renderMyBets();
     renderRanking();
-    renderLealHistory();
+    // mismo cuidado que con editingMatchId: si hay una edición de un resultado
+    // del historial en curso, un refresco de fondo no debe reconstruir el
+    // formulario y perder lo que se venía tipeando.
+    if (!(skipAdmin && editingLealResultId)) renderLealHistory();
     if (!skipAdmin && isAdmin) renderAdmin();
     renderCartBar();
   } catch (e) {
