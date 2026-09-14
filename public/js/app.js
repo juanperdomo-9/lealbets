@@ -757,16 +757,13 @@ function renderLealHistory() {
   populateLealHistoryTeamSuggestions();
 
   // solo puede cargar un resultado quien el admin haya habilitado puntualmente
-  // (users.can_log_leal_history); todos pueden ver el historial igual.
+  // (users.can_log_leal_history); todos pueden ver el historial igual. Si no
+  // tiene permiso, directamente no ve ni el formulario ni ningún aviso: solo
+  // la lista, como cualquier otro usuario de lectura.
   const formEl = document.getElementById('lealHistoryAddForm');
-  const noAccessEl = document.getElementById('lealHistoryNoAccessMsg');
   const myEntry = ME ? STATE.ranking.find((r) => r.name === ME) : null;
   const canLog = !!(myEntry && myEntry.canLogLealHistory);
   if (formEl) formEl.style.display = canLog ? 'block' : 'none';
-  if (noAccessEl) {
-    noAccessEl.style.display = ME && !canLog ? 'flex' : 'none';
-    noAccessEl.innerHTML = `${icon('lock', 22)}Todavía no tenés permiso para cargar resultados acá. Pedile a un admin que te habilite desde la pestaña Equipos.`;
-  }
 
   const results = STATE.lealResults || [];
   if (results.length === 0) {
