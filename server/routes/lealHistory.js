@@ -92,4 +92,41 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Formación dibujada de un partido: titulares por posición, cambios, amarillas
+// y rojas. Es un dato aparte del resultado/goleadores, y lo carga quien tenga
+// el mismo permiso de historial (no hace falta ser admin puntualmente para
+// esto, es la misma persona de confianza que ya puede cargar resultados).
+const VALID_FORMATIONS = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2', '3-4-3', '5-3-2'];
+const MAX_NAME_LEN = 40;
+function cleanName(v) { return String(v || '').trim().slice(0, MAX_NAME_LEN); }
+function parseLineup(input) {
+  if (!input || typeof input !== 'object') return null;
+  const formation = VALID_FORMATIONS.includes(input.formation) ? input.formation : '4-4-2';
+  const players = Array.isArray(input.players) ? input.players.slice(0, 11).map(cleanName) : [];
+  while (players.length < 11) players.push('');
+  const subs = (Array.isArray(input.subs) ? input.subs.slice(0, 20) : [])
+    .map((sub) => ({
+      out: cleanName(sub && sub.out),
+      in: cleanName(sub && sub.in),
+      minute: Number.isInteger(parseInt(sub && sub.minute, 10)) ? Math.max(0, Math.min(120, parseInt(sub.minute, 10))) : null,
+    }))
+    .filter((sub) => sub.out || sub.in);
+  const yellows = (Array.isArray(input.yellows) ? input.yellows.slice(0, 30) : []).map(cleanName).filter(Boolean);
+  const reds = (Array.isArray(input.reds) ? input.reds.slice(0, 30) : []).map(cleanName).filter(Boolean);
+  const figura = cleanName(input.figura);
+  return { formation, players, subs, yellows, reds, figura };
+}
+
+router.put('/:id/lineup', requireAuth, requireLealHistoryAccess, async (req, res) => {
+  const lineup = parseLineup(req.body.lineup);
+  if (!lineup) return res.status(400).json({ error: 'Formación inválida' });
+  const { rows } = await pool.query(
+    'UPDATE leal_results SET lineup=$1 WHERE id=$2 RETURNING id',
+    [JSON.stringify(lineup), req.params.id]
+  );
+  if (rows.length === 0) return res.status(404).json({ error: 'No se encontró ese partido' });
+  broadcastStateUpdate();
+  res.json({ ok: true });
+});
+
 module.exports = router;

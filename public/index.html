@@ -144,7 +144,8 @@
     <section id="tab-historial">
       <div class="subtabs" id="historialSubtabs">
         <button data-view="teams" class="active" onclick="setHistorialView('teams')">Por rival</button>
-        <button data-view="scorers" onclick="setHistorialView('scorers')">Goleadores</button>
+        <button data-view="scorers" onclick="setHistorialView('scorers')">Estadísticas</button>
+        <button data-view="matches" onclick="setHistorialView('matches')">Partidos jugados</button>
       </div>
 
       <div id="historial-teams" class="historial-view active">
@@ -181,9 +182,23 @@
       </div>
 
       <div id="historial-scorers" class="historial-view">
-        <p class="leal-history-hint">Se arma sola con los goleadores de todos los partidos cargados.</p>
+        <div class="subtabs subtabs-scroll" id="statsSubtabs">
+          <button data-stat="goals" class="active" onclick="setStatsView('goals')">Goleadores</button>
+          <button data-stat="played" onclick="setStatsView('played')">Jugados</button>
+          <button data-stat="yellow" onclick="setStatsView('yellow')">Amarillas</button>
+          <button data-stat="red" onclick="setStatsView('red')">Rojas</button>
+          <button data-stat="figura" onclick="setStatsView('figura')">Figura</button>
+        </div>
+        <p class="leal-history-hint">Se arma sola con los datos de todos los partidos cargados.</p>
         <div class="card leal-history-card">
-          <div id="topScorersList"></div>
+          <div id="statsTableList"></div>
+        </div>
+      </div>
+
+      <div id="historial-matches" class="historial-view">
+        <p class="leal-history-hint">Todos los partidos, del más nuevo al más viejo. Tocá uno para ver (o cargar) su formación, cambios, amarillas y rojas.</p>
+        <div class="card leal-history-card">
+          <div id="allMatchesList"></div>
         </div>
       </div>
     </section>

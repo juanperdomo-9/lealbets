@@ -13,6 +13,7 @@ let cartPanelOpen = false;
 let expandedMatches = new Set();
 let expandedPlayers = new Set();
 let expandedHistoryTeams = new Set();
+let expandedLealMatches = new Set(); // qué partidos del historial tienen su detalle/formación abierto
 let activeBoostId = null; // superaumento cargado en el carrito actual (se pierde si se toca algo a mano)
 let boostDraftMatchId = null; // admin: partido elegido para armar un superaumento nuevo
 let boostDraftLegs = []; // admin: selecciones elegidas para ese superaumento
@@ -38,6 +39,8 @@ const ICONS = {
   menu: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>`,
   dice: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg>`,
   clock: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>`,
+  card: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="2" transform="rotate(-8 12 12)"/></svg>`,
+  star: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 6.5 7 1-5 5 1.5 7L12 18l-6.5 3.5 1.5-7-5-5 7-1z"/></svg>`,
 };
 function icon(name, size) {
   const s = size || 14;
@@ -732,6 +735,18 @@ function populateLealHistoryTeamSuggestions() {
     .map((t) => `<option value="${t.name}">`)
     .join('');
 }
+// si el nombre de un rival coincide (sin importar mayúsculas) con un equipo
+// oficial del torneo, se muestra con el casing oficial (así el escudo real se
+// reconoce aunque alguien lo haya tipeado en minúsculas); si no, tal cual está.
+function resolveOpponentLabel(rawOpponent) {
+  const key = rawOpponent.trim().toLowerCase();
+  const official = STATE.teams.find((t) => t.name.toLowerCase() === key);
+  return official ? official.name : rawOpponent.trim();
+}
+function currentUserCanLogHistory() {
+  const myEntry = ME ? STATE.ranking.find((r) => r.name === ME) : null;
+  return !!(myEntry && myEntry.canLogLealHistory);
+}
 
 // ---------- filas de goleadores (nombre + goles), reusadas para agregar y editar ----------
 function scorerRowHtml(name, goals) {
@@ -754,6 +769,225 @@ function collectScorerRows(containerId) {
       goals: parseInt(row.querySelector('.scorerGoals').value, 10) || 1,
     }))
     .filter((s) => s.name);
+}
+
+// ---------- filas simples (un solo nombre): amarillas y rojas ----------
+function simpleNameRowHtml(name) {
+  const safe = (name || '').replace(/"/g, '&quot;');
+  return `<div class="scorer-row">
+    <input type="text" class="simpleName" placeholder="Nombre" maxlength="40" value="${safe}">
+    <button type="button" class="scorer-remove" onclick="this.parentElement.remove()">${icon('close', 11)}</button>
+  </div>`;
+}
+function addSimpleNameRow(containerId) {
+  const container = document.getElementById(containerId);
+  if (container) container.insertAdjacentHTML('beforeend', simpleNameRowHtml(''));
+}
+function collectSimpleNameRows(containerId) {
+  return Array.from(document.querySelectorAll(`#${containerId} .simpleName`)).map((i) => i.value.trim()).filter(Boolean);
+}
+
+// ---------- filas de cambios (sale / entra / minuto) ----------
+function subRowHtml(out, playerIn, minute) {
+  const safeOut = (out || '').replace(/"/g, '&quot;');
+  const safeIn = (playerIn || '').replace(/"/g, '&quot;');
+  return `<div class="sub-row">
+    <input type="text" class="subOut" placeholder="Sale" maxlength="40" value="${safeOut}">
+    <input type="text" class="subIn" placeholder="Entra" maxlength="40" value="${safeIn}">
+    <input type="number" class="subMinute" placeholder="Min" min="0" max="120" value="${minute != null && minute !== '' ? minute : ''}">
+    <button type="button" class="scorer-remove" onclick="this.parentElement.remove()">${icon('close', 11)}</button>
+  </div>`;
+}
+function addSubRow(containerId) {
+  const container = document.getElementById(containerId);
+  if (container) container.insertAdjacentHTML('beforeend', subRowHtml('', '', null));
+}
+function collectSubRows(containerId) {
+  return Array.from(document.querySelectorAll(`#${containerId} .sub-row`))
+    .map((row) => ({
+      out: row.querySelector('.subOut').value.trim(),
+      in: row.querySelector('.subIn').value.trim(),
+      minute: row.querySelector('.subMinute').value ? parseInt(row.querySelector('.subMinute').value, 10) : null,
+    }))
+    .filter((s) => s.out || s.in);
+}
+
+// ---------- formación dibujada: cancha + 11 posiciones por formación ----------
+const FORMATIONS = {
+  '4-4-2': [
+    { x: 50, y: 92, pos: 'POR' },
+    { x: 15, y: 72, pos: 'DEF' }, { x: 38, y: 75, pos: 'DEF' }, { x: 62, y: 75, pos: 'DEF' }, { x: 85, y: 72, pos: 'DEF' },
+    { x: 15, y: 45, pos: 'MED' }, { x: 38, y: 48, pos: 'MED' }, { x: 62, y: 48, pos: 'MED' }, { x: 85, y: 45, pos: 'MED' },
+    { x: 35, y: 15, pos: 'DEL' }, { x: 65, y: 15, pos: 'DEL' },
+  ],
+  '4-3-3': [
+    { x: 50, y: 92, pos: 'POR' },
+    { x: 15, y: 72, pos: 'DEF' }, { x: 38, y: 75, pos: 'DEF' }, { x: 62, y: 75, pos: 'DEF' }, { x: 85, y: 72, pos: 'DEF' },
+    { x: 30, y: 48, pos: 'MED' }, { x: 50, y: 45, pos: 'MED' }, { x: 70, y: 48, pos: 'MED' },
+    { x: 15, y: 15, pos: 'DEL' }, { x: 50, y: 10, pos: 'DEL' }, { x: 85, y: 15, pos: 'DEL' },
+  ],
+  '4-2-3-1': [
+    { x: 50, y: 92, pos: 'POR' },
+    { x: 15, y: 72, pos: 'DEF' }, { x: 38, y: 75, pos: 'DEF' }, { x: 62, y: 75, pos: 'DEF' }, { x: 85, y: 72, pos: 'DEF' },
+    { x: 38, y: 52, pos: 'MCD' }, { x: 62, y: 52, pos: 'MCD' },
+    { x: 20, y: 30, pos: 'MED' }, { x: 50, y: 28, pos: 'MED' }, { x: 80, y: 30, pos: 'MED' },
+    { x: 50, y: 10, pos: 'DEL' },
+  ],
+  '3-5-2': [
+    { x: 50, y: 92, pos: 'POR' },
+    { x: 25, y: 75, pos: 'DEF' }, { x: 50, y: 78, pos: 'DEF' }, { x: 75, y: 75, pos: 'DEF' },
+    { x: 12, y: 48, pos: 'MED' }, { x: 32, y: 45, pos: 'MED' }, { x: 50, y: 42, pos: 'MED' }, { x: 68, y: 45, pos: 'MED' }, { x: 88, y: 48, pos: 'MED' },
+    { x: 38, y: 15, pos: 'DEL' }, { x: 62, y: 15, pos: 'DEL' },
+  ],
+  '3-4-3': [
+    { x: 50, y: 92, pos: 'POR' },
+    { x: 25, y: 75, pos: 'DEF' }, { x: 50, y: 78, pos: 'DEF' }, { x: 75, y: 75, pos: 'DEF' },
+    { x: 15, y: 48, pos: 'MED' }, { x: 38, y: 45, pos: 'MED' }, { x: 62, y: 45, pos: 'MED' }, { x: 85, y: 48, pos: 'MED' },
+    { x: 15, y: 15, pos: 'DEL' }, { x: 50, y: 10, pos: 'DEL' }, { x: 85, y: 15, pos: 'DEL' },
+  ],
+  '5-3-2': [
+    { x: 50, y: 92, pos: 'POR' },
+    { x: 10, y: 72, pos: 'DEF' }, { x: 30, y: 78, pos: 'DEF' }, { x: 50, y: 80, pos: 'DEF' }, { x: 70, y: 78, pos: 'DEF' }, { x: 90, y: 72, pos: 'DEF' },
+    { x: 30, y: 45, pos: 'MED' }, { x: 50, y: 42, pos: 'MED' }, { x: 70, y: 45, pos: 'MED' },
+    { x: 35, y: 15, pos: 'DEL' }, { x: 65, y: 15, pos: 'DEL' },
+  ],
+};
+const POSITION_NAMES = { POR: 'Arquero', DEF: 'Defensor', MCD: 'Volante de marca', MED: 'Mediocampista', DEL: 'Delantero' };
+function formationInputLabels(formation) {
+  const positions = FORMATIONS[formation] || FORMATIONS['4-4-2'];
+  const counts = {};
+  return positions.map((p) => {
+    counts[p.pos] = (counts[p.pos] || 0) + 1;
+    return `${POSITION_NAMES[p.pos] || p.pos} ${counts[p.pos]}`;
+  });
+}
+function pitchSvg(formation, players) {
+  const positions = FORMATIONS[formation] || FORMATIONS['4-4-2'];
+  const dots = positions.map((p, i) => {
+    const name = (players && players[i]) ? String(players[i]).trim() : '';
+    const label = name ? initials(name) : String(i + 1);
+    const firstName = name ? name.split(' ')[0] : '';
+    return `<g class="pitch-player">
+      <circle cx="${p.x}" cy="${p.y}" r="6.2"></circle>
+      <text x="${p.x}" y="${p.y}">${label}</text>
+      ${firstName ? `<text x="${p.x}" y="${p.y + 10.5}" text-anchor="middle" class="pitch-player-name">${firstName}</text>` : ''}
+    </g>`;
+  }).join('');
+  return `<svg viewBox="0 0 100 100" class="pitch-svg" preserveAspectRatio="none">
+    <rect x="1" y="1" width="98" height="98" class="pitch-grass"></rect>
+    <line x1="1" y1="50" x2="99" y2="50" class="pitch-mark"></line>
+    <circle cx="50" cy="50" r="9" class="pitch-mark"></circle>
+    <rect x="24" y="1" width="52" height="13" class="pitch-mark"></rect>
+    <rect x="24" y="86" width="52" height="13" class="pitch-mark"></rect>
+    ${dots}
+  </svg>`;
+}
+
+function toggleLealMatchDetail(id) {
+  if (expandedLealMatches.has(id)) expandedLealMatches.delete(id);
+  else expandedLealMatches.add(id);
+  renderLealHistory();
+}
+
+// ---------- editor de formación (cancha + cambios + amarillas/rojas + figura) ----------
+let editingLineupId = null;
+let lineupFormationDraft = '4-4-2';
+function startEditLineup(id) {
+  editingLealResultId = null; // no mezclar con el editor de resultado del mismo partido
+  editingLineupId = id;
+  expandedLealMatches.add(id);
+  const r = STATE.lealResults.find((x) => x.id === id);
+  lineupFormationDraft = (r && r.lineup && r.lineup.formation) || '4-4-2';
+  renderLealHistory();
+}
+function cancelEditLineup() {
+  editingLineupId = null;
+  renderLealHistory();
+}
+function onLineupFormationChange(id) {
+  // al cambiar de formación cambia la cantidad/orden de posiciones, así que
+  // (por simpleza) se reinicia la alineación titular tipeada hasta ahora.
+  lineupFormationDraft = document.getElementById(`lineupFormation-${id}`).value;
+  renderLealHistory();
+}
+async function saveLineup(id) {
+  const formation = document.getElementById(`lineupFormation-${id}`).value;
+  const players = Array.from(document.querySelectorAll(`#lineupPlayers-${id} .lineupPlayerInput`)).map((i) => i.value.trim());
+  const subs = collectSubRows(`lineupSubs-${id}`);
+  const yellows = collectSimpleNameRows(`lineupYellows-${id}`);
+  const reds = collectSimpleNameRows(`lineupReds-${id}`);
+  const figura = document.getElementById(`lineupFigura-${id}`).value.trim();
+  try {
+    await apiFetch(`/leal-history/${id}/lineup`, { method: 'PUT', body: { lineup: { formation, players, subs, yellows, reds, figura } } });
+    editingLineupId = null;
+    await loadState();
+    renderAll();
+    toast('Formación guardada');
+  } catch (e) { toast(e.message); }
+}
+
+// arma la sección de formación/cambios/tarjetas de un partido: modo lectura,
+// modo edición, o el botón para cargarla si todavía no existe. Se usa tanto en
+// "Por rival" como en "Partidos jugados", así que no depende de en qué vista
+// se llame.
+function buildLineupSectionHtml(r) {
+  const canLog = currentUserCanLogHistory();
+  const lineup = r.lineup || null;
+  if (editingLineupId === r.id) {
+    const formation = lineupFormationDraft;
+    const labels = formationInputLabels(formation);
+    const existingPlayers = (lineup && lineup.formation === formation && lineup.players) || [];
+    const playerInputs = labels.map((label, i) => `
+      <div class="lineup-player-row">
+        <label>${label}</label>
+        <input type="text" class="lineupPlayerInput" maxlength="40" value="${(existingPlayers[i] || '').replace(/"/g, '&quot;')}">
+      </div>`).join('');
+    const subRows = (lineup && lineup.subs || []).map((s) => subRowHtml(s.out, s.in, s.minute)).join('') || subRowHtml('', '', null);
+    const yellowRows = (lineup && lineup.yellows || []).map((n) => simpleNameRowHtml(n)).join('') || simpleNameRowHtml('');
+    const redRows = (lineup && lineup.reds || []).map((n) => simpleNameRowHtml(n)).join('') || simpleNameRowHtml('');
+    return `<div class="lineup-editor">
+      <label>Formación</label>
+      <select id="lineupFormation-${r.id}" onchange="onLineupFormationChange('${r.id}')">
+        ${Object.keys(FORMATIONS).map((f) => `<option value="${f}" ${f === formation ? 'selected' : ''}>${f}</option>`).join('')}
+      </select>
+      ${pitchSvg(formation, existingPlayers)}
+      <div id="lineupPlayers-${r.id}">${playerInputs}</div>
+
+      <label>Figura del partido (opcional)</label>
+      <input type="text" id="lineupFigura-${r.id}" maxlength="40" placeholder="Ej: Santiago Suarez" value="${((lineup && lineup.figura) || '').replace(/"/g, '&quot;')}">
+
+      <label>Cambios</label>
+      <div id="lineupSubs-${r.id}">${subRows}</div>
+      <button type="button" class="scorer-add-btn" onclick="addSubRow('lineupSubs-${r.id}')">+ Agregar cambio</button>
+
+      <label>Amarillas</label>
+      <div id="lineupYellows-${r.id}">${yellowRows}</div>
+      <button type="button" class="scorer-add-btn" onclick="addSimpleNameRow('lineupYellows-${r.id}')">+ Agregar amarilla</button>
+
+      <label>Rojas</label>
+      <div id="lineupReds-${r.id}">${redRows}</div>
+      <button type="button" class="scorer-add-btn" onclick="addSimpleNameRow('lineupReds-${r.id}')">+ Agregar roja</button>
+
+      <div class="row2" style="margin-top:12px;">
+        <button class="primary-btn" onclick="saveLineup('${r.id}')">Guardar formación</button>
+        <button class="reopen-btn" onclick="cancelEditLineup()">Cancelar</button>
+      </div>
+    </div>`;
+  }
+  if (lineup && lineup.players && lineup.players.some(Boolean)) {
+    return `<div class="lineup-view">
+      ${pitchSvg(lineup.formation, lineup.players)}
+      ${lineup.figura ? `<div class="lineup-events lineup-figura">${icon('star', 13)}Figura: <b>${lineup.figura}</b></div>` : ''}
+      ${lineup.subs && lineup.subs.length ? `<div class="lineup-events">${icon('undo', 13)}<b>Cambios:</b> ${lineup.subs.map((s) => `${s.out || '?'} → ${s.in || '?'}${s.minute != null ? ` (${s.minute}')` : ''}`).join(', ')}</div>` : ''}
+      ${lineup.yellows && lineup.yellows.length ? `<div class="lineup-events lineup-yellow">${icon('card', 13)}<b>Amarillas:</b> ${lineup.yellows.join(', ')}</div>` : ''}
+      ${lineup.reds && lineup.reds.length ? `<div class="lineup-events lineup-red">${icon('card', 13)}<b>Rojas:</b> ${lineup.reds.join(', ')}</div>` : ''}
+      ${canLog ? `<button class="reopen-btn" style="margin-top:4px;" onclick="startEditLineup('${r.id}')">${icon('undo', 13)}Editar formación</button>` : ''}
+    </div>`;
+  }
+  if (canLog) {
+    return `<div class="lineup-view"><button class="reopen-btn" onclick="startEditLineup('${r.id}')">${icon('undo', 13)}Cargar formación</button></div>`;
+  }
+  return `<div class="lineup-view"><div class="empty" style="padding:16px;">${icon('users', 20)}Todavía no cargaron la formación de este partido.</div></div>`;
 }
 
 async function addLealResult() {
@@ -794,6 +1028,7 @@ async function deleteLealResult(id) {
 
 let editingLealResultId = null;
 function startEditLealResult(id) {
+  editingLineupId = null; // no mezclar con el editor de formación del mismo partido
   editingLealResultId = id;
   renderLealHistory();
 }
@@ -820,50 +1055,121 @@ async function saveLealResultEdit(id) {
   } catch (e) { toast(e.message); }
 }
 
-// ---------- tabla de goleadores: se arma sola sumando scorersDetail de todos los partidos ----------
-function renderTopScorers() {
-  const container = document.getElementById('topScorersList');
-  if (!container) return;
+// ---------- estadísticas: varias tablas que se arman solas con lo cargado ----------
+// Goleadores sale de scorers_detail (ya existía); partidos jugados/amarillas/
+// rojas/figura salen de la formación (lineup) de cada partido, cuando está
+// cargada. Todo se recalcula solo, no hay nada que mantener a mano.
+function aggregateGoals() {
   const results = STATE.lealResults || [];
-  const totals = {}; // key: nombre en minúsculas -> {label, goals, matches}
+  const totals = {};
   for (const r of results) {
     for (const s of (r.scorersDetail || [])) {
       const name = (s.name || '').trim();
       if (!name) continue;
       const key = name.toLowerCase();
-      if (!totals[key]) totals[key] = { label: name, goals: 0, matches: 0 };
-      totals[key].goals += s.goals;
+      if (!totals[key]) totals[key] = { label: name, count: 0, matches: 0 };
+      totals[key].count += s.goals;
       totals[key].matches += 1;
     }
   }
-  const rows = Object.values(totals).sort((a, b) => b.goals - a.goals || a.label.localeCompare(b.label));
+  return Object.values(totals).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+function aggregateLineupStat(kind) {
+  const results = STATE.lealResults || [];
+  const totals = {};
+  for (const r of results) {
+    const lineup = r.lineup;
+    if (!lineup) continue;
+    let names = [];
+    if (kind === 'played') {
+      const starters = (lineup.players || []).filter(Boolean);
+      const subsIn = (lineup.subs || []).map((s) => s.in).filter(Boolean);
+      names = Array.from(new Set([...starters, ...subsIn].map((n) => n.trim()).filter(Boolean)));
+    } else if (kind === 'yellow') names = lineup.yellows || [];
+    else if (kind === 'red') names = lineup.reds || [];
+    else if (kind === 'figura') names = lineup.figura ? [lineup.figura] : [];
+    for (const raw of names) {
+      const name = (raw || '').trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (!totals[key]) totals[key] = { label: name, count: 0 };
+      totals[key].count += 1;
+    }
+  }
+  return Object.values(totals).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+const STATS_CONFIG = {
+  goals: { icon: 'goal', empty: 'Todavía no hay goleadores cargados.' },
+  played: { icon: 'users', empty: 'Todavía no hay partidos con formación cargada.' },
+  yellow: { icon: 'card', empty: 'Todavía no hay amarillas cargadas.' },
+  red: { icon: 'card', empty: 'Todavía no hay rojas cargadas.' },
+  figura: { icon: 'star', empty: 'Todavía no eligieron ninguna figura del partido.' },
+};
+let statsView = 'goals';
+function setStatsView(kind) {
+  statsView = kind;
+  document.querySelectorAll('#statsSubtabs button').forEach((b) => b.classList.toggle('active', b.dataset.stat === kind));
+  renderStatsView();
+}
+function renderStatsView() {
+  const container = document.getElementById('statsTableList');
+  if (!container) return;
+  const cfg = STATS_CONFIG[statsView] || STATS_CONFIG.goals;
+  const rows = statsView === 'goals' ? aggregateGoals() : aggregateLineupStat(statsView);
   if (rows.length === 0) {
-    container.innerHTML = `<div class="empty">${icon('goal', 26)}Todavía no hay goleadores cargados.</div>`;
+    container.innerHTML = `<div class="empty">${icon(cfg.icon, 26)}${cfg.empty}</div>`;
     return;
   }
   container.innerHTML = rows.map((r, i) => `
     <div class="scorer-rank-row${i === 0 ? ' top' : ''}">
       <div class="scorer-rank-pos">${i + 1}</div>
-      <div class="scorer-rank-name">${r.label}<small>${r.matches} partido${r.matches === 1 ? '' : 's'} convirtiendo</small></div>
-      <div class="scorer-rank-goals">${icon('goal', 13)}${r.goals}</div>
+      <div class="scorer-rank-name">${r.label}${statsView === 'goals' ? `<small>${r.matches} partido${r.matches === 1 ? '' : 's'} convirtiendo</small>` : ''}</div>
+      <div class="scorer-rank-goals${statsView === 'red' ? ' is-red' : ''}">${icon(cfg.icon, 13)}${r.count}</div>
     </div>
   `).join('');
+}
+
+// ---------- partidos jugados: todos los resultados, sin agrupar por rival ----------
+function renderAllMatchesList() {
+  const container = document.getElementById('allMatchesList');
+  if (!container) return;
+  const results = STATE.lealResults || [];
+  if (results.length === 0) {
+    container.innerHTML = `<div class="empty">${icon('trophy', 26)}Todavía no cargaron ningún partido.</div>`;
+    return;
+  }
+  container.innerHTML = results.map((r) => {
+    const label = resolveOpponentLabel(r.opponent);
+    const isOpen = expandedLealMatches.has(r.id);
+    return `<div class="history-match all-matches-row">
+      <div class="history-match-score" onclick="toggleLealMatchDetail('${r.id}')" style="cursor:pointer;">
+        <span class="history-team-left">${crestHtml(label)}<span class="history-team-title" style="text-transform:none;">${label}</span></span>
+        <span class="player-props-toggle">${icon('chevron', 13)}</span>
+      </div>
+      <div class="history-match-score">
+        <span class="match-id">${r.playedOn || ''}</span>
+        <span>Leal FC <b>${r.lealGoals} – ${r.opponentGoals}</b> ${label}</span>
+      </div>
+      <div class="history-match-scorers">${icon('goal', 13)}${r.scorers || 'Sin goleadores cargados'}</div>
+      ${isOpen ? buildLineupSectionHtml(r) : ''}
+    </div>`;
+  }).join('');
 }
 
 function renderLealHistory() {
   const container = document.getElementById('lealHistoryList');
   if (!container) return;
   populateLealHistoryTeamSuggestions();
-  renderTopScorers();
+  renderStatsView();
+  renderAllMatchesList();
   renderLealOverallRecord();
 
-  // solo puede cargar un resultado quien el admin haya habilitado puntualmente
-  // (users.can_log_leal_history); todos pueden ver el historial igual. Si no
-  // tiene permiso, directamente no ve ni el formulario ni ningún aviso: solo
-  // la lista, como cualquier otro usuario de lectura.
+  // solo puede cargar un resultado (o una formación) quien el admin haya
+  // habilitado puntualmente (users.can_log_leal_history); todos pueden ver el
+  // historial igual. Si no tiene permiso, directamente no ve ni el formulario
+  // ni ningún aviso: solo la lista, como cualquier otro usuario de lectura.
   const formEl = document.getElementById('lealHistoryAddForm');
-  const myEntry = ME ? STATE.ranking.find((r) => r.name === ME) : null;
-  const canLog = !!(myEntry && myEntry.canLogLealHistory);
+  const canLog = currentUserCanLogHistory();
   if (formEl) formEl.style.display = canLog ? 'block' : 'none';
   // arranca con una fila vacía lista para escribir; si ya tiene filas (el usuario
   // las está completando) no se tocan en renders sucesivos.
@@ -877,18 +1183,12 @@ function renderLealHistory() {
   }
   // los resultados ya llegan ordenados del más nuevo al más viejo; se agrupan por
   // rival sin importar mayúsculas (para que "Canilla Libre" y "canilla libre" no
-  // queden como dos grupos separados). Si el nombre coincide con un equipo oficial
-  // del torneo, se muestra con el casing oficial (así el escudo real se reconoce
-  // aunque alguien lo haya tipeado en minúsculas); si no, se muestra tal como se
-  // cargó la primera vez.
+  // queden como dos grupos separados), usando el casing oficial del equipo
+  // cuando existe (resolveOpponentLabel).
   const byOpponent = {};
   for (const r of results) {
-    const raw = r.opponent.trim();
-    const key = raw.toLowerCase();
-    if (!byOpponent[key]) {
-      const official = STATE.teams.find((t) => t.name.toLowerCase() === key);
-      byOpponent[key] = { label: official ? official.name : raw, entries: [] };
-    }
+    const key = r.opponent.trim().toLowerCase();
+    if (!byOpponent[key]) byOpponent[key] = { label: resolveOpponentLabel(r.opponent), entries: [] };
     byOpponent[key].entries.push(r);
   }
   const groups = Object.keys(byOpponent).sort((a, b) => byOpponent[a].label.localeCompare(byOpponent[b].label));
@@ -929,12 +1229,15 @@ function renderLealHistory() {
             </div>
           </div>`;
         } else {
+          const isMatchOpen = expandedLealMatches.has(r.id);
           html += `<div class="history-match">
-            <div class="history-match-score">
+            <div class="history-match-score" onclick="toggleLealMatchDetail('${r.id}')" style="cursor:pointer;">
               <span class="match-id">${r.playedOn || ''}</span>
               <span>Leal FC <b>${r.lealGoals} – ${r.opponentGoals}</b> ${label}</span>
+              <span class="player-props-toggle">${icon('chevron', 13)}</span>
             </div>
             <div class="history-match-scorers">${icon('goal', 13)}${r.scorers || 'Sin goleadores cargados'}</div>
+            ${isMatchOpen ? buildLineupSectionHtml(r) : ''}
             ${isAdmin ? `<div class="row2" style="margin-top:8px;">
               <button class="reopen-btn" onclick="startEditLealResult('${r.id}')">${icon('undo', 13)}Editar</button>
               <button class="reopen-btn" onclick="deleteLealResult('${r.id}')">${icon('undo', 13)}Borrar</button>
@@ -1092,7 +1395,8 @@ function setMatchesView(view) {
 function setHistorialView(view) {
   document.querySelectorAll('#historialSubtabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   document.querySelectorAll('.historial-view').forEach((el) => el.classList.toggle('active', el.id === 'historial-' + view));
-  if (view === 'scorers') renderTopScorers();
+  if (view === 'scorers') renderStatsView();
+  if (view === 'matches') renderAllMatchesList();
 }
 
 function renderMyBets() {
@@ -1362,9 +1666,9 @@ function renderAll(skipAdmin) {
     renderMyBets();
     renderRanking();
     // mismo cuidado que con editingMatchId: si hay una edición de un resultado
-    // del historial en curso, un refresco de fondo no debe reconstruir el
-    // formulario y perder lo que se venía tipeando.
-    if (!(skipAdmin && editingLealResultId)) renderLealHistory();
+    // o de una formación del historial en curso, un refresco de fondo no debe
+    // reconstruir el formulario y perder lo que se venía tipeando.
+    if (!(skipAdmin && (editingLealResultId || editingLineupId))) renderLealHistory();
     if (!skipAdmin && isAdmin) renderAdmin();
     renderCartBar();
   } catch (e) {

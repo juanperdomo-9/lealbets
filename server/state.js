@@ -111,6 +111,7 @@ function rowToLealResult(r) {
     opponentGoals: r.opponent_goals,
     scorers: scorersText,
     scorersDetail,
+    lineup: r.lineup || null,
     playedOn: r.played_on || '',
     createdBy: r.created_by,
     createdAt: Number(r.created_at),

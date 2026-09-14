@@ -165,6 +165,12 @@ section.active{display:block;animation:fadeIn .25s ease;}
   color:var(--ink); background:linear-gradient(160deg, var(--gold), var(--gold-2));
   border-color:transparent; box-shadow:var(--shadow-gold);
 }
+/* variante para cuando hay demasiados sub-tabs para repartirse el ancho sin
+   apretarse (mismo problema que ya tuvo el nav de arriba): se desliza en vez
+   de cortar el texto. */
+.subtabs.subtabs-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; justify-content:flex-start;}
+.subtabs.subtabs-scroll::-webkit-scrollbar{display:none;}
+.subtabs.subtabs-scroll button{flex:0 0 auto; padding:9px 16px; white-space:nowrap;}
 .section-title{
   font-family:var(--font-display);font-size:13px;color:var(--chalk-dim);
   text-transform:uppercase;letter-spacing:.6px;margin:4px 2px 12px;
@@ -447,6 +453,46 @@ section.active{display:block;animation:fadeIn .25s ease;}
   flex:none;display:flex;align-items:center;gap:5px;font-family:var(--font-display);font-weight:700;font-size:15px;color:var(--gold);
 }
 .scorer-rank-goals .icon{color:var(--gold-2);}
+.scorer-rank-goals.is-red{color:var(--red);}
+.scorer-rank-goals.is-red .icon{color:var(--red);}
+
+/* ---------------------------------- formación dibujada de un partido ---------------------------------- */
+.all-matches-row{cursor:default;}
+.pitch-svg{
+  width:100%; aspect-ratio:1/1.15; display:block; margin:10px 0 12px;
+  border-radius:var(--radius-md); overflow:hidden;
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.3));
+}
+.pitch-grass{fill:#1d5c3f;}
+.pitch-mark{fill:none;stroke:rgba(255,255,255,.5);stroke-width:0.6;}
+.pitch-player circle{fill:var(--gold);stroke:var(--gold-2);stroke-width:0.5;}
+.pitch-player text{
+  font-family:var(--font-display);font-weight:700;font-size:5px;fill:var(--ink);
+  text-anchor:middle;dominant-baseline:middle;
+}
+.pitch-player-name{
+  font-family:var(--font-body)!important;font-weight:600!important;font-size:3.6px!important;
+  fill:#fff!important;paint-order:stroke;stroke:rgba(0,0,0,.65);stroke-width:0.7px;
+}
+.lineup-view, .lineup-editor{padding:12px 0 4px;border-top:1px dashed var(--border-soft);margin-top:8px;}
+.lineup-events{font-size:11.5px;color:var(--chalk-dim);margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.lineup-events b{color:var(--chalk);font-weight:600;margin-right:2px;}
+.lineup-events .icon{flex:none;color:var(--gold-2);}
+.lineup-yellow .icon{color:var(--gold);}
+.lineup-red .icon{color:var(--red);}
+.lineup-figura b{color:var(--gold);}
+.lineup-editor label{font-size:11px;color:var(--chalk-dim);display:block;margin:12px 0 6px;font-weight:500;}
+.lineup-editor label:first-child{margin-top:0;}
+.lineup-editor select, .lineup-editor input[type="text"], .lineup-editor input[type="number"]{
+  width:100%;background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--radius-sm);
+  color:var(--chalk);padding:9px 11px;font-size:13px;font-family:var(--font-body);margin-bottom:0;
+}
+.lineup-player-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.lineup-player-row label{flex:0 0 92px;margin:0;font-size:10.5px;color:var(--chalk-faint);}
+.lineup-player-row input{flex:1;min-width:0;}
+.sub-row{display:flex;gap:6px;align-items:center;margin-bottom:8px;}
+.sub-row .subOut, .sub-row .subIn{flex:1;min-width:0;}
+.sub-row .subMinute{width:52px;flex:none;text-align:center;}
 
 /* ---------------------------------- bet slip / cart ---------------------------------- */
 .slip{margin-top:14px;border-top:1px solid var(--border-soft);padding-top:14px;}
