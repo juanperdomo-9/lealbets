@@ -36,6 +36,7 @@ const SCORER_ALIASES = {
   'juanpe': 'Juan Perdomo',
   'juan perdomo': 'Juan Perdomo',
   'juani jurado': 'Juani Jurado',
+  'juani': 'Juani Jurado',
   'yiyo': 'Enzo Bolivar',
   'enzo bolivar': 'Enzo Bolivar',
   'martin': 'Martin Plini',
@@ -123,8 +124,11 @@ const MATCHES = [
 
   { opponent: 'La 57', leal: 1, opp: 4, scorers: [s('Nacho Sarru', 1)] },
 
-  { opponent: 'Vieja Guardia', leal: 2, opp: 4, scorers: [s('Santiago Suarez', 1), s('Nahuel Troncellito', 1)] },
-  { opponent: 'Vieja Guardia', leal: 4, opp: 6, scorers: [s('Matias Brandan', 2), s('Juani Jurado', 2)] },
+  // ojo: "Vieja Guardia 2-4 (Santi Suarez, Tronce)" y "Vieja Guardia 4-6 (Mati
+  // Brandan x2, Juani Jurado x2)" NO se listan acá: ya estaban cargados a mano
+  // en producción por el propio usuario antes de esta importación (con el
+  // sistema viejo de texto libre) — se actualizan más abajo en vez de
+  // insertarlos de nuevo, para no duplicar esos 2 partidos.
   { opponent: 'Vieja Guardia', leal: 5, opp: 3, scorers: [s('Matias Brandan', 1), s('Nicolas Monteverde', 1), s('Juani Jurado', 1), s('Santiago Suarez', 2)] },
   { opponent: 'Vieja Guardia', leal: 4, opp: 0, scorers: [s('Valentino Plini', 1), s('Elias Peñaloza', 2), s('Luca Forteis', 1)] },
   { opponent: 'Vieja Guardia', leal: 2, opp: 1, scorers: [s('Santiago Suarez', 1), s('Lautaro Crescitelli', 1)] },
@@ -202,10 +206,23 @@ const MATCHES = [
   { opponent: 'DDFC', leal: 1, opp: 0, scorers: [s('Tronce', 1)] },
 ];
 
+// Estas 4 filas ya estaban cargadas a mano en producción (por el usuario real,
+// con el sistema viejo de texto libre) antes de esta importación: se les
+// completa scorers_detail (les faltaba, quedaba vacío) en vez de insertarlas
+// de nuevo. Se identifican por opponent + marcador + created_by, sin tocar su
+// id/fecha de carga original.
+const EXISTING_ROW_FIXUPS = [
+  { opponent: 'La Sede', leal: 2, opp: 1, scorers: [s('Nacho Sarru', 1), s('Grachi Bellagamba', 1)] },
+  { opponent: 'La Sede', leal: 2, opp: 4, scorers: [s('Yiyo', 1), s('Juani', 1)] },
+  { opponent: 'Vieja Guardia', leal: 2, opp: 4, scorers: [s('Santi Suarez', 1), s('Tronce', 1)] },
+  { opponent: 'Vieja Guardia', leal: 4, opp: 6, scorers: [s('Mati Brandan', 2), s('Juani Jurado', 2)] },
+];
+
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
   const totalGoalsListed = MATCHES.reduce((acc, m) => acc + m.scorers.reduce((a, sc) => a + sc.goals, 0), 0);
   console.log(`${MATCHES.length} partidos para importar, ${totalGoalsListed} goles individuales listados.`);
+  console.log(`${EXISTING_ROW_FIXUPS.length} filas ya existentes a completar con scorers_detail.`);
   if (dryRun) {
     console.log('Dry run: no se escribe nada. Primeros 3 partidos parseados:');
     console.log(JSON.stringify(MATCHES.slice(0, 3), null, 2));
@@ -216,6 +233,19 @@ async function main() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    for (const f of EXISTING_ROW_FIXUPS) {
+      const { rowCount } = await client.query(
+        `UPDATE leal_results SET scorers_detail=$1
+         WHERE opponent=$2 AND leal_goals=$3 AND opponent_goals=$4 AND created_by='juanperdomo' AND scorers_detail='[]'`,
+        [JSON.stringify(f.scorers), f.opponent, f.leal, f.opp]
+      );
+      if (rowCount !== 1) {
+        throw new Error(`Se esperaba actualizar exactamente 1 fila para ${f.opponent} ${f.leal}-${f.opp}, se actualizaron ${rowCount}. Abortando para no arriesgar un dato mal pisado.`);
+      }
+    }
+    console.log(`${EXISTING_ROW_FIXUPS.length} filas existentes completadas con scorers_detail.`);
+
     let ts = Date.now() - MATCHES.length * 1000; // orden estable, se insertan en el orden de la lista
     for (const m of MATCHES) {
       const id = uid();
