@@ -6,7 +6,7 @@ let TOKEN = null;
 let ADMIN_TOKEN = null;
 let ME = null;
 let isAdmin = false;
-let STATE = { teams: [], matches: [], ranking: [], lealPlayerOrder: [], lealResults: [] };
+let STATE = { teams: [], matches: [], ranking: [], lealPlayerOrder: [], lealResults: [], lealMatchesPlayed: [] };
 let MY_BETS = [];
 let CART = [];
 let cartPanelOpen = false;
@@ -239,7 +239,8 @@ async function checkAdminPassword() {
     document.getElementById('adminGate').style.display = 'none';
     document.getElementById('adminContent').style.display = 'block';
     renderAdmin();
-    renderLealHistory(); // para que aparezca ya el botón de borrar en el historial
+    renderLealHistory(); // para que aparezca ya el botón de borrar/editar en "Por rival"...
+    renderAllMatchesList(); // ...y en "Partidos jugados"
   } catch (e) {
     toast(e.message);
   }
@@ -273,7 +274,7 @@ document.querySelectorAll('.tab-btn[data-tab]').forEach((btn) => {
     closeMoreMenu();
     window.scrollTo({ top: 0 });
     if (btn.dataset.tab === 'admin' && isAdmin) renderAdmin();
-    if (btn.dataset.tab === 'historial') renderLealHistory();
+    if (btn.dataset.tab === 'historial') { renderLealHistory(); renderAllMatchesList(); }
     if (btn.dataset.tab === 'casino') {
       if (casinoView === 'blackjack') bjLoadState();
       else if (casinoView === 'penalty') pnLoadState();
@@ -788,26 +789,24 @@ function collectSimpleNameRows(containerId) {
 }
 
 // ---------- filas de cambios (sale / entra / minuto) ----------
-function subRowHtml(out, playerIn, minute) {
+function subRowHtml(out, playerIn) {
   const safeOut = (out || '').replace(/"/g, '&quot;');
   const safeIn = (playerIn || '').replace(/"/g, '&quot;');
   return `<div class="sub-row">
     <input type="text" class="subOut" placeholder="Sale" maxlength="40" value="${safeOut}">
     <input type="text" class="subIn" placeholder="Entra" maxlength="40" value="${safeIn}">
-    <input type="number" class="subMinute" placeholder="Min" min="0" max="120" value="${minute != null && minute !== '' ? minute : ''}">
     <button type="button" class="scorer-remove" onclick="this.parentElement.remove()">${icon('close', 11)}</button>
   </div>`;
 }
 function addSubRow(containerId) {
   const container = document.getElementById(containerId);
-  if (container) container.insertAdjacentHTML('beforeend', subRowHtml('', '', null));
+  if (container) container.insertAdjacentHTML('beforeend', subRowHtml('', ''));
 }
 function collectSubRows(containerId) {
   return Array.from(document.querySelectorAll(`#${containerId} .sub-row`))
     .map((row) => ({
       out: row.querySelector('.subOut').value.trim(),
       in: row.querySelector('.subIn').value.trim(),
-      minute: row.querySelector('.subMinute').value ? parseInt(row.querySelector('.subMinute').value, 10) : null,
     }))
     .filter((s) => s.out || s.in);
 }
@@ -886,29 +885,29 @@ function pitchSvg(formation, players) {
 function toggleLealMatchDetail(id) {
   if (expandedLealMatches.has(id)) expandedLealMatches.delete(id);
   else expandedLealMatches.add(id);
-  renderLealHistory();
+  renderAllMatchesList();
 }
 
 // ---------- editor de formación (cancha + cambios + amarillas/rojas + figura) ----------
 let editingLineupId = null;
 let lineupFormationDraft = '4-4-2';
 function startEditLineup(id) {
-  editingLealResultId = null; // no mezclar con el editor de resultado del mismo partido
+  editingLealMatchId = null; // no mezclar con el editor de resultado del mismo partido
   editingLineupId = id;
   expandedLealMatches.add(id);
-  const r = STATE.lealResults.find((x) => x.id === id);
+  const r = (STATE.lealMatchesPlayed || []).find((x) => x.id === id);
   lineupFormationDraft = (r && r.lineup && r.lineup.formation) || '4-4-2';
-  renderLealHistory();
+  renderAllMatchesList();
 }
 function cancelEditLineup() {
   editingLineupId = null;
-  renderLealHistory();
+  renderAllMatchesList();
 }
 function onLineupFormationChange(id) {
   // al cambiar de formación cambia la cantidad/orden de posiciones, así que
   // (por simpleza) se reinicia la alineación titular tipeada hasta ahora.
   lineupFormationDraft = document.getElementById(`lineupFormation-${id}`).value;
-  renderLealHistory();
+  renderAllMatchesList();
 }
 async function saveLineup(id) {
   const formation = document.getElementById(`lineupFormation-${id}`).value;
@@ -918,7 +917,7 @@ async function saveLineup(id) {
   const reds = collectSimpleNameRows(`lineupReds-${id}`);
   const figura = document.getElementById(`lineupFigura-${id}`).value.trim();
   try {
-    await apiFetch(`/leal-history/${id}/lineup`, { method: 'PUT', body: { lineup: { formation, players, subs, yellows, reds, figura } } });
+    await apiFetch(`/leal-matches/${id}/lineup`, { method: 'PUT', body: { lineup: { formation, players, subs, yellows, reds, figura } } });
     editingLineupId = null;
     await loadState();
     renderAll();
@@ -926,10 +925,9 @@ async function saveLineup(id) {
   } catch (e) { toast(e.message); }
 }
 
-// arma la sección de formación/cambios/tarjetas de un partido: modo lectura,
-// modo edición, o el botón para cargarla si todavía no existe. Se usa tanto en
-// "Por rival" como en "Partidos jugados", así que no depende de en qué vista
-// se llame.
+// arma la sección de formación/cambios/tarjetas de un partido de "Partidos
+// jugados" (modo lectura, modo edición, o el botón para cargarla si todavía
+// no existe). Es un cuaderno aparte de "Por rival": no tiene formación.
 function buildLineupSectionHtml(r) {
   const canLog = currentUserCanLogHistory();
   const lineup = r.lineup || null;
@@ -942,7 +940,7 @@ function buildLineupSectionHtml(r) {
         <label>${label}</label>
         <input type="text" class="lineupPlayerInput" maxlength="40" value="${(existingPlayers[i] || '').replace(/"/g, '&quot;')}">
       </div>`).join('');
-    const subRows = (lineup && lineup.subs || []).map((s) => subRowHtml(s.out, s.in, s.minute)).join('') || subRowHtml('', '', null);
+    const subRows = (lineup && lineup.subs || []).map((s) => subRowHtml(s.out, s.in)).join('') || subRowHtml('', '');
     const yellowRows = (lineup && lineup.yellows || []).map((n) => simpleNameRowHtml(n)).join('') || simpleNameRowHtml('');
     const redRows = (lineup && lineup.reds || []).map((n) => simpleNameRowHtml(n)).join('') || simpleNameRowHtml('');
     return `<div class="lineup-editor">
@@ -978,7 +976,7 @@ function buildLineupSectionHtml(r) {
     return `<div class="lineup-view">
       ${pitchSvg(lineup.formation, lineup.players)}
       ${lineup.figura ? `<div class="lineup-events lineup-figura">${icon('star', 13)}Figura: <b>${lineup.figura}</b></div>` : ''}
-      ${lineup.subs && lineup.subs.length ? `<div class="lineup-events">${icon('undo', 13)}<b>Cambios:</b> ${lineup.subs.map((s) => `${s.out || '?'} → ${s.in || '?'}${s.minute != null ? ` (${s.minute}')` : ''}`).join(', ')}</div>` : ''}
+      ${lineup.subs && lineup.subs.length ? `<div class="lineup-events">${icon('undo', 13)}<b>Cambios:</b> ${lineup.subs.map((s) => `${s.out || '?'} → ${s.in || '?'}`).join(', ')}</div>` : ''}
       ${lineup.yellows && lineup.yellows.length ? `<div class="lineup-events lineup-yellow">${icon('card', 13)}<b>Amarillas:</b> ${lineup.yellows.join(', ')}</div>` : ''}
       ${lineup.reds && lineup.reds.length ? `<div class="lineup-events lineup-red">${icon('card', 13)}<b>Rojas:</b> ${lineup.reds.join(', ')}</div>` : ''}
       ${canLog ? `<button class="reopen-btn" style="margin-top:4px;" onclick="startEditLineup('${r.id}')">${icon('undo', 13)}Editar formación</button>` : ''}
@@ -1075,7 +1073,7 @@ function aggregateGoals() {
   return Object.values(totals).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 function aggregateLineupStat(kind) {
-  const results = STATE.lealResults || [];
+  const results = STATE.lealMatchesPlayed || []; // las formaciones viven en "Partidos jugados", aparte de "Por rival"
   const totals = {};
   for (const r of results) {
     const lineup = r.lineup;
@@ -1130,16 +1128,119 @@ function renderStatsView() {
 }
 
 // ---------- partidos jugados: todos los resultados, sin agrupar por rival ----------
+// ---------- "Partidos jugados": cuaderno aparte de "Por rival" ----------
+function populateLealMatchesTeamSuggestions() {
+  const datalist = document.getElementById('lmTeamSuggestions');
+  if (!datalist) return;
+  datalist.innerHTML = STATE.teams
+    .filter((t) => t.name !== LEAL_TEAM_NAME)
+    .map((t) => `<option value="${t.name}">`)
+    .join('');
+}
+async function addLealMatchPlayed() {
+  if (!ME) { toast('Entrá con tu usuario para cargar un partido'); return; }
+  const opponentInput = document.getElementById('lmOpponentInput');
+  const lealGoalsInput = document.getElementById('lmLealGoals');
+  const opponentGoalsInput = document.getElementById('lmOpponentGoals');
+  const playedOnInput = document.getElementById('lmPlayedOnInput');
+  const opponent = opponentInput.value.trim();
+  const lealGoals = parseInt(lealGoalsInput.value, 10);
+  const opponentGoals = parseInt(opponentGoalsInput.value, 10);
+  if (!opponent) { toast('Poné contra qué equipo jugó Leal'); return; }
+  if (!Number.isInteger(lealGoals) || lealGoals < 0 || !Number.isInteger(opponentGoals) || opponentGoals < 0) {
+    toast('Cargá un marcador válido'); return;
+  }
+  const scorers = collectScorerRows('lmScorersRows');
+  try {
+    await apiFetch('/leal-matches', {
+      method: 'POST',
+      body: { opponent, lealGoals, opponentGoals, scorers, playedOn: playedOnInput.value.trim() },
+    });
+    opponentInput.value = ''; lealGoalsInput.value = ''; opponentGoalsInput.value = ''; playedOnInput.value = '';
+    document.getElementById('lmScorersRows').innerHTML = '';
+    addScorerRow('lmScorersRows');
+    await loadState();
+    renderAll();
+    toast('Partido agregado');
+  } catch (e) { toast(e.message); }
+}
+async function deleteLealMatchPlayed(id) {
+  try {
+    await apiFetch(`/leal-matches/${id}`, { method: 'DELETE', admin: true });
+    await loadState();
+    renderAll();
+    toast('Partido borrado');
+  } catch (e) { toast(e.message); }
+}
+let editingLealMatchId = null;
+function startEditLealMatchPlayed(id) {
+  editingLineupId = null; // no mezclar con el editor de formación del mismo partido
+  editingLealMatchId = id;
+  renderAllMatchesList();
+}
+function cancelEditLealMatchPlayed() {
+  editingLealMatchId = null;
+  renderAllMatchesList();
+}
+async function saveLealMatchPlayedEdit(id) {
+  const opponent = document.getElementById(`editLmOpponent-${id}`).value.trim();
+  const lealGoals = parseInt(document.getElementById(`editLmLealGoals-${id}`).value, 10);
+  const opponentGoals = parseInt(document.getElementById(`editLmOpponentGoals-${id}`).value, 10);
+  const playedOn = document.getElementById(`editLmPlayedOn-${id}`).value.trim();
+  if (!opponent) { toast('Poné contra qué equipo jugó Leal'); return; }
+  if (!Number.isInteger(lealGoals) || lealGoals < 0 || !Number.isInteger(opponentGoals) || opponentGoals < 0) {
+    toast('Cargá un marcador válido'); return;
+  }
+  const scorers = collectScorerRows(`editLmScorers-${id}`);
+  try {
+    await apiFetch(`/leal-matches/${id}`, { method: 'PUT', admin: true, body: { opponent, lealGoals, opponentGoals, scorers, playedOn } });
+    editingLealMatchId = null;
+    await loadState();
+    renderAll();
+    toast('Partido corregido');
+  } catch (e) { toast(e.message); }
+}
+
 function renderAllMatchesList() {
   const container = document.getElementById('allMatchesList');
   if (!container) return;
-  const results = STATE.lealResults || [];
+  populateLealMatchesTeamSuggestions();
+
+  const formEl = document.getElementById('lealMatchAddForm');
+  const canLog = currentUserCanLogHistory();
+  if (formEl) formEl.style.display = canLog ? 'block' : 'none';
+  const scorersRowsEl = document.getElementById('lmScorersRows');
+  if (scorersRowsEl && canLog && scorersRowsEl.children.length === 0) addScorerRow('lmScorersRows');
+
+  const results = STATE.lealMatchesPlayed || [];
   if (results.length === 0) {
-    container.innerHTML = `<div class="empty">${icon('trophy', 26)}Todavía no cargaron ningún partido.</div>`;
+    container.innerHTML = `<div class="empty">${icon('trophy', 26)}Todavía no cargaron ningún partido acá. ¡Agregá el primero!</div>`;
     return;
   }
   container.innerHTML = results.map((r) => {
     const label = resolveOpponentLabel(r.opponent);
+    if (isAdmin && editingLealMatchId === r.id) {
+      const scorerRows = (r.scorersDetail || []).map((s) => scorerRowHtml(s.name, s.goals)).join('') || scorerRowHtml('', 1);
+      return `<div class="history-match history-match-editing">
+        <label>Rival</label>
+        <input id="editLmOpponent-${r.id}" type="text" value="${r.opponent.replace(/"/g, '&quot;')}" maxlength="60">
+        <label>Marcador (Leal FC primero)</label>
+        <div class="result-inline">
+          <input id="editLmLealGoals-${r.id}" type="number" min="0" value="${r.lealGoals}">
+          <span class="dash">–</span>
+          <input id="editLmOpponentGoals-${r.id}" type="number" min="0" value="${r.opponentGoals}">
+        </div>
+        <label>Goleadores de Leal</label>
+        <div id="editLmScorers-${r.id}">${scorerRows}</div>
+        <button type="button" class="scorer-add-btn" onclick="addScorerRow('editLmScorers-${r.id}')">+ Agregar goleador</button>
+        <label style="margin-top:14px;">Fecha (opcional)</label>
+        <input id="editLmPlayedOn-${r.id}" type="text" value="${(r.playedOn || '').replace(/"/g, '&quot;')}" maxlength="40">
+        <div class="row2" style="margin-top:12px;">
+          <button class="primary-btn" onclick="saveLealMatchPlayedEdit('${r.id}')">Guardar cambios</button>
+          <button class="reopen-btn" onclick="cancelEditLealMatchPlayed()">Cancelar</button>
+        </div>
+      </div>`;
+    }
     const isOpen = expandedLealMatches.has(r.id);
     return `<div class="history-match all-matches-row">
       <div class="history-match-score" onclick="toggleLealMatchDetail('${r.id}')" style="cursor:pointer;">
@@ -1152,6 +1253,10 @@ function renderAllMatchesList() {
       </div>
       <div class="history-match-scorers">${icon('goal', 13)}${r.scorers || 'Sin goleadores cargados'}</div>
       ${isOpen ? buildLineupSectionHtml(r) : ''}
+      ${isAdmin ? `<div class="row2" style="margin-top:8px;">
+        <button class="reopen-btn" onclick="startEditLealMatchPlayed('${r.id}')">${icon('undo', 13)}Editar</button>
+        <button class="reopen-btn" onclick="deleteLealMatchPlayed('${r.id}')">${icon('undo', 13)}Borrar</button>
+      </div>` : ''}
     </div>`;
   }).join('');
 }
@@ -1161,7 +1266,6 @@ function renderLealHistory() {
   if (!container) return;
   populateLealHistoryTeamSuggestions();
   renderStatsView();
-  renderAllMatchesList();
   renderLealOverallRecord();
 
   // solo puede cargar un resultado (o una formación) quien el admin haya
@@ -1229,15 +1333,12 @@ function renderLealHistory() {
             </div>
           </div>`;
         } else {
-          const isMatchOpen = expandedLealMatches.has(r.id);
           html += `<div class="history-match">
-            <div class="history-match-score" onclick="toggleLealMatchDetail('${r.id}')" style="cursor:pointer;">
+            <div class="history-match-score">
               <span class="match-id">${r.playedOn || ''}</span>
               <span>Leal FC <b>${r.lealGoals} – ${r.opponentGoals}</b> ${label}</span>
-              <span class="player-props-toggle">${icon('chevron', 13)}</span>
             </div>
             <div class="history-match-scorers">${icon('goal', 13)}${r.scorers || 'Sin goleadores cargados'}</div>
-            ${isMatchOpen ? buildLineupSectionHtml(r) : ''}
             ${isAdmin ? `<div class="row2" style="margin-top:8px;">
               <button class="reopen-btn" onclick="startEditLealResult('${r.id}')">${icon('undo', 13)}Editar</button>
               <button class="reopen-btn" onclick="deleteLealResult('${r.id}')">${icon('undo', 13)}Borrar</button>
@@ -1665,10 +1766,12 @@ function renderAll(skipAdmin) {
     if (!(skipAdmin && editingMatchId)) renderMatches();
     renderMyBets();
     renderRanking();
-    // mismo cuidado que con editingMatchId: si hay una edición de un resultado
-    // o de una formación del historial en curso, un refresco de fondo no debe
-    // reconstruir el formulario y perder lo que se venía tipeando.
-    if (!(skipAdmin && (editingLealResultId || editingLineupId))) renderLealHistory();
+    // mismo cuidado que con editingMatchId: si hay una edición en curso, un
+    // refresco de fondo no debe reconstruir el formulario y perder lo que se
+    // venía tipeando. "Por rival" y "Partidos jugados" son listas aparte, cada
+    // una con su propio guard.
+    if (!(skipAdmin && editingLealResultId)) renderLealHistory();
+    if (!(skipAdmin && (editingLealMatchId || editingLineupId))) renderAllMatchesList();
     if (!skipAdmin && isAdmin) renderAdmin();
     renderCartBar();
   } catch (e) {
@@ -2228,7 +2331,8 @@ function renderMines() {
     document.getElementById('adminGate').style.display = 'none';
     document.getElementById('adminContent').style.display = 'block';
     renderAdmin();
-    renderLealHistory(); // para que aparezca ya el botón de borrar en el historial
+    renderLealHistory(); // para que aparezca ya el botón de borrar/editar en "Por rival"...
+    renderAllMatchesList(); // ...y en "Partidos jugados"
   }
 
   connectSocket();

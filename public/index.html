@@ -196,7 +196,31 @@
       </div>
 
       <div id="historial-matches" class="historial-view">
-        <p class="leal-history-hint">Todos los partidos, del más nuevo al más viejo. Tocá uno para ver (o cargar) su formación, cambios, amarillas y rojas.</p>
+        <p class="leal-history-hint">Cuaderno aparte de "Por rival": acá cargás partido y formación juntos. Podés repetir un partido de los dos lados sin problema.</p>
+
+        <div class="card" id="lealMatchAddForm" style="display:none;">
+          <h3>Agregar partido</h3>
+          <label>Rival</label>
+          <input id="lmOpponentInput" type="text" list="lmTeamSuggestions" placeholder="Ej: Canilla Libre" maxlength="60">
+          <datalist id="lmTeamSuggestions"></datalist>
+
+          <label>Marcador (Leal FC primero)</label>
+          <div class="result-inline">
+            <input id="lmLealGoals" type="number" min="0" placeholder="Leal">
+            <span class="dash">–</span>
+            <input id="lmOpponentGoals" type="number" min="0" placeholder="Rival">
+          </div>
+
+          <label>Goleadores de Leal (opcional)</label>
+          <div id="lmScorersRows"></div>
+          <button type="button" class="scorer-add-btn" onclick="addScorerRow('lmScorersRows')">+ Agregar goleador</button>
+
+          <label style="margin-top:14px;">Fecha (opcional)</label>
+          <input id="lmPlayedOnInput" type="text" placeholder="Ej: 12/09/2026" maxlength="40">
+
+          <button onclick="addLealMatchPlayed()">Agregar partido</button>
+        </div>
+
         <div class="card leal-history-card">
           <div id="allMatchesList"></div>
         </div>
@@ -228,7 +252,7 @@
       <div class="card">
         <h3>Historial de Leal FC</h3>
         <label>Quién puede cargar resultados</label>
-        <div class="field-hint">Los que tildes acá van a poder agregar partidos en la pestaña Historial. El resto solo puede verlo.</div>
+        <div class="field-hint">Los que tildes acá van a poder cargar en "Por rival" y en "Partidos jugados" (formación, cambios, tarjetas). El resto solo puede verlo.</div>
         <div id="lealHistoryAccessList"></div>
       </div>
 

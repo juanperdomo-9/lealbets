@@ -17,6 +17,7 @@ const blackjackRoutes = require('./routes/blackjack');
 const penaltyRoutes = require('./routes/penalty');
 const minesRoutes = require('./routes/mines');
 const lealHistoryRoutes = require('./routes/lealHistory');
+const lealMatchesRoutes = require('./routes/lealMatches');
 
 const PORT = process.env.PORT || 3000;
 
@@ -37,6 +38,7 @@ async function main() {
   app.use('/api/penalty', penaltyRoutes);
   app.use('/api/mines', minesRoutes);
   app.use('/api/leal-history', lealHistoryRoutes);
+  app.use('/api/leal-matches', lealMatchesRoutes);
 
   app.get('/healthz', (req, res) => res.json({ ok: true }));
 

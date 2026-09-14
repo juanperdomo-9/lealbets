@@ -112,6 +112,21 @@ CREATE TABLE IF NOT EXISTS leal_results (
   created_by TEXT,
   created_at BIGINT NOT NULL
 );
+
+-- "Partidos jugados": cuaderno TOTALMENTE APARTE de leal_results (a propósito,
+-- no se sincronizan). Acá va el resultado + goleadores + la formación dibujada
+-- (titulares, cambios, amarillas, rojas, figura del partido).
+CREATE TABLE IF NOT EXISTS leal_matches_played (
+  id TEXT PRIMARY KEY,
+  opponent TEXT NOT NULL,
+  leal_goals INTEGER NOT NULL,
+  opponent_goals INTEGER NOT NULL,
+  scorers_detail JSONB NOT NULL DEFAULT '[]',
+  lineup JSONB,
+  played_on TEXT,
+  created_by TEXT,
+  created_at BIGINT NOT NULL
+);
 `;
 
 // Migraciones chiquitas y seguras para bases ya desplegadas (no tocan datos existentes).

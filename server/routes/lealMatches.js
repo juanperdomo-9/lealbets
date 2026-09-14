@@ -1,9 +1,10 @@
-// Historial de Leal FC (footer, visible para todos los usuarios logueados): un
-// cuaderno de resultados contra cualquier rival, esté o no cargado como equipo
-// "oficial" del torneo. No toca la tabla matches ni el motor de cuotas/apuestas:
-// es un registro histórico aparte. La LECTURA es para todos; para CARGAR una fila
-// hace falta que el admin le haya dado permiso a ese usuario puntual
-// (users.can_log_leal_history), así el admin controla quién puede escribir ahí.
+// "Partidos jugados": un cuaderno TOTALMENTE APARTE de "Por rival"
+// (leal_results). No comparten datos ni se sincronizan entre sí a propósito
+// (el mismo partido real puede estar cargado en los dos lados, no pasa nada);
+// acá se guarda resultado + goleadores + la formación dibujada (titulares,
+// cambios, amarillas, rojas, figura del partido). La LECTURA es para todos;
+// para escribir hace falta el mismo permiso que "Por rival"
+// (users.can_log_leal_history) — el admin decide quién puede cargar.
 const express = require('express');
 const { pool, uid } = require('../db');
 const { requireAuth, requireAdmin } = require('../auth');
@@ -14,19 +15,18 @@ const router = express.Router();
 const MAX_OPPONENT_LEN = 60;
 const MAX_PLAYED_ON_LEN = 40;
 const MAX_SCORER_NAME_LEN = 60;
-const MAX_SCORERS = 30; // tope generoso, solo para no permitir un array gigante
+const MAX_SCORERS = 30;
+const MAX_NAME_LEN = 40;
+const VALID_FORMATIONS = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2', '3-4-3', '5-3-2'];
 
 async function requireLealHistoryAccess(req, res, next) {
   const { rows } = await pool.query('SELECT can_log_leal_history FROM users WHERE name=$1', [req.userName]);
   if (rows.length === 0 || !rows[0].can_log_leal_history) {
-    return res.status(403).json({ error: 'No tenés permiso para cargar resultados. Pedile a un admin que te habilite.' });
+    return res.status(403).json({ error: 'No tenés permiso para cargar partidos. Pedile a un admin que te habilite.' });
   }
   next();
 }
-
-// Los goleadores se cargan estructurados (nombre + goles), no como texto libre:
-// así la tabla de goleadores se puede sumar de verdad en vez de tener que
-// re-interpretar un texto escrito a mano.
+function cleanName(v) { return String(v || '').trim().slice(0, MAX_NAME_LEN); }
 function parseScorers(input) {
   if (!Array.isArray(input)) return [];
   const out = [];
@@ -37,6 +37,20 @@ function parseScorers(input) {
     out.push({ name, goals });
   }
   return out;
+}
+// Cambios: solo "sale" / "entra" (sin minuto, a pedido).
+function parseLineup(input) {
+  if (!input || typeof input !== 'object') return null;
+  const formation = VALID_FORMATIONS.includes(input.formation) ? input.formation : '4-4-2';
+  const players = Array.isArray(input.players) ? input.players.slice(0, 11).map(cleanName) : [];
+  while (players.length < 11) players.push('');
+  const subs = (Array.isArray(input.subs) ? input.subs.slice(0, 20) : [])
+    .map((sub) => ({ out: cleanName(sub && sub.out), in: cleanName(sub && sub.in) }))
+    .filter((sub) => sub.out || sub.in);
+  const yellows = (Array.isArray(input.yellows) ? input.yellows.slice(0, 30) : []).map(cleanName).filter(Boolean);
+  const reds = (Array.isArray(input.reds) ? input.reds.slice(0, 30) : []).map(cleanName).filter(Boolean);
+  const figura = cleanName(input.figura);
+  return { formation, players, subs, yellows, reds, figura };
 }
 
 router.post('/', requireAuth, requireLealHistoryAccess, async (req, res) => {
@@ -53,7 +67,7 @@ router.post('/', requireAuth, requireLealHistoryAccess, async (req, res) => {
 
   const id = uid();
   await pool.query(
-    `INSERT INTO leal_results (id, opponent, leal_goals, opponent_goals, scorers_detail, played_on, created_by, created_at)
+    `INSERT INTO leal_matches_played (id, opponent, leal_goals, opponent_goals, scorers_detail, played_on, created_by, created_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
     [id, opponent, lealGoals, opponentGoals, JSON.stringify(scorers), playedOn || null, req.userName, Date.now()]
   );
@@ -61,9 +75,6 @@ router.post('/', requireAuth, requireLealHistoryAccess, async (req, res) => {
   res.json({ ok: true, id });
 });
 
-// Editar o borrar una fila del historial es una acción de moderación (por si
-// alguien carga algo mal o hace una broma pesada); se deja solo para admin,
-// como el resto de las acciones "destructivas" de la app.
 router.put('/:id', requireAdmin, async (req, res) => {
   const opponent = String(req.body.opponent || '').trim().slice(0, MAX_OPPONENT_LEN);
   const lealGoals = parseInt(req.body.lealGoals, 10);
@@ -77,17 +88,29 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    `UPDATE leal_results SET opponent=$1, leal_goals=$2, opponent_goals=$3, scorers_detail=$4, played_on=$5
+    `UPDATE leal_matches_played SET opponent=$1, leal_goals=$2, opponent_goals=$3, scorers_detail=$4, played_on=$5
      WHERE id=$6 RETURNING id`,
     [opponent, lealGoals, opponentGoals, JSON.stringify(scorers), playedOn || null, req.params.id]
   );
-  if (rows.length === 0) return res.status(404).json({ error: 'No se encontró ese resultado' });
+  if (rows.length === 0) return res.status(404).json({ error: 'No se encontró ese partido' });
   broadcastStateUpdate();
   res.json({ ok: true });
 });
 
 router.delete('/:id', requireAdmin, async (req, res) => {
-  await pool.query('DELETE FROM leal_results WHERE id=$1', [req.params.id]);
+  await pool.query('DELETE FROM leal_matches_played WHERE id=$1', [req.params.id]);
+  broadcastStateUpdate();
+  res.json({ ok: true });
+});
+
+router.put('/:id/lineup', requireAuth, requireLealHistoryAccess, async (req, res) => {
+  const lineup = parseLineup(req.body.lineup);
+  if (!lineup) return res.status(400).json({ error: 'Formación inválida' });
+  const { rows } = await pool.query(
+    'UPDATE leal_matches_played SET lineup=$1 WHERE id=$2 RETURNING id',
+    [JSON.stringify(lineup), req.params.id]
+  );
+  if (rows.length === 0) return res.status(404).json({ error: 'No se encontró ese partido' });
   broadcastStateUpdate();
   res.json({ ok: true });
 });

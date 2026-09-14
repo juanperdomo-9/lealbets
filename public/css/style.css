@@ -492,7 +492,6 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .lineup-player-row input{flex:1;min-width:0;}
 .sub-row{display:flex;gap:6px;align-items:center;margin-bottom:8px;}
 .sub-row .subOut, .sub-row .subIn{flex:1;min-width:0;}
-.sub-row .subMinute{width:52px;flex:none;text-align:center;}
 
 /* ---------------------------------- bet slip / cart ---------------------------------- */
 .slip{margin-top:14px;border-top:1px solid var(--border-soft);padding-top:14px;}

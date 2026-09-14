@@ -111,7 +111,6 @@ function rowToLealResult(r) {
     opponentGoals: r.opponent_goals,
     scorers: scorersText,
     scorersDetail,
-    lineup: r.lineup || null,
     playedOn: r.played_on || '',
     createdBy: r.created_by,
     createdAt: Number(r.created_at),
@@ -126,13 +125,38 @@ async function loadLealResults(client = pool) {
   return rows.map(rowToLealResult);
 }
 
+// "Partidos jugados": cuaderno aparte de leal_results (a propósito, no se
+// sincronizan), con resultado + goleadores + formación dibujada.
+function rowToLealMatchPlayed(r) {
+  const scorersDetail = r.scorers_detail || [];
+  const scorersText = scorersDetail.length
+    ? scorersDetail.map((s) => (s.goals > 1 ? `${s.name} x${s.goals}` : s.name)).join(', ')
+    : '';
+  return {
+    id: r.id,
+    opponent: r.opponent,
+    lealGoals: r.leal_goals,
+    opponentGoals: r.opponent_goals,
+    scorers: scorersText,
+    scorersDetail,
+    lineup: r.lineup || null,
+    playedOn: r.played_on || '',
+    createdBy: r.created_by,
+    createdAt: Number(r.created_at),
+  };
+}
+async function loadLealMatchesPlayed(client = pool) {
+  const { rows } = await client.query('SELECT * FROM leal_matches_played ORDER BY created_at DESC');
+  return rows.map(rowToLealMatchPlayed);
+}
+
 async function getPublicState() {
-  const [teams, matches, ranking, superBoosts, marketClosed, lealResults] = await Promise.all([
-    loadTeams(), loadMatches(), loadRanking(), loadActiveSuperBoosts(), isMarketClosed(), loadLealResults(),
+  const [teams, matches, ranking, superBoosts, marketClosed, lealResults, lealMatchesPlayed] = await Promise.all([
+    loadTeams(), loadMatches(), loadRanking(), loadActiveSuperBoosts(), isMarketClosed(), loadLealResults(), loadLealMatchesPlayed(),
   ]);
   return {
     teams, matches, ranking, lealPlayerOrder: LEAL_PLAYER_ORDER, superBoosts,
-    maxSuperBoostStake: MAX_SUPERBOOST_STAKE, marketClosed, lealResults,
+    maxSuperBoostStake: MAX_SUPERBOOST_STAKE, marketClosed, lealResults, lealMatchesPlayed,
   };
 }
 
@@ -146,5 +170,7 @@ module.exports = {
   loadActiveSuperBoosts,
   rowToLealResult,
   loadLealResults,
+  rowToLealMatchPlayed,
+  loadLealMatchesPlayed,
   getPublicState,
 };
