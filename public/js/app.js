@@ -6,12 +6,13 @@ let TOKEN = null;
 let ADMIN_TOKEN = null;
 let ME = null;
 let isAdmin = false;
-let STATE = { teams: [], matches: [], ranking: [], lealPlayerOrder: [] };
+let STATE = { teams: [], matches: [], ranking: [], lealPlayerOrder: [], lealResults: [] };
 let MY_BETS = [];
 let CART = [];
 let cartPanelOpen = false;
 let expandedMatches = new Set();
 let expandedPlayers = new Set();
+let expandedHistoryTeams = new Set();
 let activeBoostId = null; // superaumento cargado en el carrito actual (se pierde si se toca algo a mano)
 let boostDraftMatchId = null; // admin: partido elegido para armar un superaumento nuevo
 let boostDraftLegs = []; // admin: selecciones elegidas para ese superaumento
@@ -34,17 +35,28 @@ const ICONS = {
   undo: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>`,
   ticket: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/><line x1="10" y1="6.5" x2="10" y2="8" stroke-dasharray="1 2"/><line x1="10" y1="16" x2="10" y2="17.5" stroke-dasharray="1 2"/><line x1="10" y1="11" x2="10" y2="13" stroke-dasharray="1 2"/></svg>`,
   fire: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c2 4-2 5-2 9a2 2 0 0 0 4 0c0-1-.5-2-.5-2s1.5 1.2 1.5 4.2a4 4 0 0 1-8 0C7 8 10 6 12 2z"/></svg>`,
+  menu: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>`,
+  dice: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg>`,
+  clock: `<svg viewBox="0 0 24 24" width="{s}" height="{s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>`,
 };
 function icon(name, size) {
   const s = size || 14;
   return `<span class="icon">${(ICONS[name] || '').split('{s}').join(s)}</span>`;
 }
 
-// rellena los íconos de los elementos estáticos del HTML (gate + header)
+// rellena los íconos de los elementos estáticos del HTML (gate + header + nav de abajo)
 document.getElementById('userIcon').innerHTML = ICONS.user.split('{s}').join(16);
 document.getElementById('lockIcon').innerHTML = ICONS.lock.split('{s}').join(16);
 document.getElementById('enterIcon').innerHTML = ICONS.login.split('{s}').join(16);
 document.getElementById('walletIcon').innerHTML = ICONS.wallet.split('{s}').join(14);
+const NAV_ICONS = {
+  matches: 'ball', mybets: 'ticket', casino: 'dice', historial: 'clock', ranking: 'trophy', admin: 'users',
+};
+for (const [tab, name] of Object.entries(NAV_ICONS)) {
+  const el = document.getElementById('navIcon-' + tab);
+  if (el) el.innerHTML = ICONS[name].split('{s}').join(20);
+}
+document.getElementById('navIcon-more').innerHTML = ICONS.menu.split('{s}').join(20);
 
 // ---------- api helper ----------
 async function apiFetch(path, opts = {}) {
@@ -82,6 +94,7 @@ function initials(name) {
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return (words[0][0] + words[1][0]).toUpperCase();
 }
+const LEAL_TEAM_NAME = 'Leal FC';
 // escudos reales de los equipos del torneo (si un equipo nuevo no tiene logo cargado, cae en las iniciales)
 const TEAM_LOGOS = {
   'Canilla Libre': '/img/teams/canilla-libre.jpg',
@@ -223,19 +236,41 @@ async function checkAdminPassword() {
     document.getElementById('adminGate').style.display = 'none';
     document.getElementById('adminContent').style.display = 'block';
     renderAdmin();
+    renderLealHistory(); // para que aparezca ya el botón de borrar en el historial
   } catch (e) {
     toast(e.message);
   }
 }
 
-// ---------- tabs ----------
-document.querySelectorAll('nav.tabs button').forEach((btn) => {
+// ---------- tabs (nav de abajo + menú "Más") ----------
+// "Historial" y "Equipos" viven adentro del desplegable "Más" (no entran cómodos
+// como pestañas sueltas en una pantalla de celular angosta); cuando alguna de las
+// dos está activa, el botón "Más" se marca resaltado para que no parezca que no
+// hay ninguna sección seleccionada.
+const MORE_TAB_NAMES = ['historial', 'admin'];
+function toggleMoreMenu(e) {
+  if (e) e.stopPropagation();
+  document.getElementById('moreMenu').hidden = !document.getElementById('moreMenu').hidden;
+}
+function closeMoreMenu() {
+  document.getElementById('moreMenu').hidden = true;
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('moreMenu');
+  const moreBtn = document.getElementById('navMoreBtn');
+  if (!menu.hidden && !menu.contains(e.target) && !moreBtn.contains(e.target)) closeMoreMenu();
+});
+document.querySelectorAll('.tab-btn[data-tab]').forEach((btn) => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('nav.tabs button').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.tab-btn[data-tab]').forEach((b) => b.classList.remove('active'));
     document.querySelectorAll('main section').forEach((s) => s.classList.remove('active'));
     btn.classList.add('active');
+    document.getElementById('navMoreBtn').classList.toggle('active', MORE_TAB_NAMES.includes(btn.dataset.tab));
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    closeMoreMenu();
+    window.scrollTo({ top: 0 });
     if (btn.dataset.tab === 'admin' && isAdmin) renderAdmin();
+    if (btn.dataset.tab === 'historial') renderLealHistory();
     if (btn.dataset.tab === 'casino') {
       if (casinoView === 'blackjack') bjLoadState();
       else if (casinoView === 'penalty') pnLoadState();
@@ -251,6 +286,32 @@ async function loadState() {
 async function loadMyBets() {
   if (!ME) { MY_BETS = []; return; }
   MY_BETS = await apiFetch('/bets/mine');
+}
+
+// ---------- admin: quién puede cargar el historial de Leal ----------
+async function toggleLealHistoryAccess(name, checkbox) {
+  const allowed = checkbox.checked;
+  try {
+    await apiFetch(`/admin/users/${encodeURIComponent(name)}/leal-history-access`, { method: 'POST', admin: true, body: { allowed } });
+    await loadState();
+    renderAll();
+  } catch (e) {
+    checkbox.checked = !allowed; // revertir si falló
+    toast(e.message);
+  }
+}
+function renderLealHistoryAccessList() {
+  const container = document.getElementById('lealHistoryAccessList');
+  if (!container) return;
+  const users = STATE.ranking.slice().sort((a, b) => a.name.localeCompare(b.name));
+  container.innerHTML = users.length
+    ? users.map((u) => `
+        <div class="leal-access-row">
+          <span>${u.name}</span>
+          <input type="checkbox" ${u.canLogLealHistory ? 'checked' : ''} onchange="toggleLealHistoryAccess('${u.name.replace(/'/g, "\\'")}', this)">
+        </div>
+      `).join('')
+    : `<div class="empty" style="padding:20px;">Todavía no hay jugadores.</div>`;
 }
 
 // ---------- admin: cargar fichas ----------
@@ -629,6 +690,137 @@ function renderFinishedPlayerStats(m) {
   return html;
 }
 
+// historial de Leal FC (footer, visible para todos): un cuaderno de resultados que
+// cualquier usuario puede completar, contra cualquier rival (esté cargado como
+// equipo "oficial" del torneo o no). No tiene nada que ver con el sistema de
+// apuestas/partidos programados: es solo un registro histórico de lectura y carga
+// libre, agrupado por rival.
+function lealHistoryRecordFor(entries) {
+  let w = 0, d = 0, l = 0;
+  for (const e of entries) {
+    if (e.lealGoals > e.opponentGoals) w++;
+    else if (e.lealGoals < e.opponentGoals) l++;
+    else d++;
+  }
+  return { w, d, l };
+}
+function toggleHistoryTeam(key) {
+  if (expandedHistoryTeams.has(key)) expandedHistoryTeams.delete(key);
+  else expandedHistoryTeams.add(key);
+  renderLealHistory();
+}
+function populateLealHistoryTeamSuggestions() {
+  const datalist = document.getElementById('lhTeamSuggestions');
+  if (!datalist) return;
+  datalist.innerHTML = STATE.teams
+    .filter((t) => t.name !== LEAL_TEAM_NAME)
+    .map((t) => `<option value="${t.name}">`)
+    .join('');
+}
+async function addLealResult() {
+  if (!ME) { toast('Entrá con tu usuario para cargar un resultado'); return; }
+  const opponentInput = document.getElementById('lhOpponentInput');
+  const lealGoalsInput = document.getElementById('lhLealGoals');
+  const opponentGoalsInput = document.getElementById('lhOpponentGoals');
+  const scorersInput = document.getElementById('lhScorersInput');
+  const playedOnInput = document.getElementById('lhPlayedOnInput');
+  const opponent = opponentInput.value.trim();
+  const lealGoals = parseInt(lealGoalsInput.value, 10);
+  const opponentGoals = parseInt(opponentGoalsInput.value, 10);
+  if (!opponent) { toast('Poné contra qué equipo jugó Leal'); return; }
+  if (!Number.isInteger(lealGoals) || lealGoals < 0 || !Number.isInteger(opponentGoals) || opponentGoals < 0) {
+    toast('Cargá un marcador válido'); return;
+  }
+  try {
+    await apiFetch('/leal-history', {
+      method: 'POST',
+      body: { opponent, lealGoals, opponentGoals, scorers: scorersInput.value.trim(), playedOn: playedOnInput.value.trim() },
+    });
+    opponentInput.value = ''; lealGoalsInput.value = ''; opponentGoalsInput.value = '';
+    scorersInput.value = ''; playedOnInput.value = '';
+    await loadState();
+    renderAll();
+    toast('Resultado agregado al historial');
+  } catch (e) { toast(e.message); }
+}
+async function deleteLealResult(id) {
+  try {
+    await apiFetch(`/leal-history/${id}`, { method: 'DELETE', admin: true });
+    await loadState();
+    renderAll();
+    toast('Resultado borrado');
+  } catch (e) { toast(e.message); }
+}
+function renderLealHistory() {
+  const container = document.getElementById('lealHistoryList');
+  if (!container) return;
+  populateLealHistoryTeamSuggestions();
+
+  // solo puede cargar un resultado quien el admin haya habilitado puntualmente
+  // (users.can_log_leal_history); todos pueden ver el historial igual.
+  const formEl = document.getElementById('lealHistoryAddForm');
+  const noAccessEl = document.getElementById('lealHistoryNoAccessMsg');
+  const myEntry = ME ? STATE.ranking.find((r) => r.name === ME) : null;
+  const canLog = !!(myEntry && myEntry.canLogLealHistory);
+  if (formEl) formEl.style.display = canLog ? 'block' : 'none';
+  if (noAccessEl) {
+    noAccessEl.style.display = ME && !canLog ? 'flex' : 'none';
+    noAccessEl.innerHTML = `${icon('lock', 22)}Todavía no tenés permiso para cargar resultados acá. Pedile a un admin que te habilite desde la pestaña Equipos.`;
+  }
+
+  const results = STATE.lealResults || [];
+  if (results.length === 0) {
+    container.innerHTML = `<div class="empty">${icon('trophy', 26)}Todavía no cargaron ningún partido. ¡Agregá el primero!</div>`;
+    return;
+  }
+  // los resultados ya llegan ordenados del más nuevo al más viejo; se agrupan por
+  // rival sin importar mayúsculas (para que "Canilla Libre" y "canilla libre" no
+  // queden como dos grupos separados). Si el nombre coincide con un equipo oficial
+  // del torneo, se muestra con el casing oficial (así el escudo real se reconoce
+  // aunque alguien lo haya tipeado en minúsculas); si no, se muestra tal como se
+  // cargó la primera vez.
+  const byOpponent = {};
+  for (const r of results) {
+    const raw = r.opponent.trim();
+    const key = raw.toLowerCase();
+    if (!byOpponent[key]) {
+      const official = STATE.teams.find((t) => t.name.toLowerCase() === key);
+      byOpponent[key] = { label: official ? official.name : raw, entries: [] };
+    }
+    byOpponent[key].entries.push(r);
+  }
+  const groups = Object.keys(byOpponent).sort((a, b) => byOpponent[a].label.localeCompare(byOpponent[b].label));
+  let html = '';
+  for (const key of groups) {
+    const { label, entries } = byOpponent[key];
+    const { w, d, l } = lealHistoryRecordFor(entries);
+    const isOpen = expandedHistoryTeams.has(key);
+    const safeKey = key.replace(/'/g, "\\'");
+    html += `<div class="history-team">
+      <div class="history-team-name${isOpen ? ' open' : ''}" onclick="toggleHistoryTeam('${safeKey}')">
+        <span class="history-team-left">${crestHtml(label)}<span class="history-team-title">${label}</span></span>
+        <span class="history-team-record">${w}V ${d}E ${l}D</span>
+        <span class="player-props-toggle">${icon('chevron', 13)}</span>
+      </div>`;
+    if (isOpen) {
+      html += `<div class="history-matches">`;
+      for (const r of entries) {
+        html += `<div class="history-match">
+          <div class="history-match-score">
+            <span class="match-id">${r.playedOn || ''}</span>
+            <span>Leal FC <b>${r.lealGoals} – ${r.opponentGoals}</b> ${label}</span>
+          </div>
+          <div class="history-match-scorers">${icon('goal', 13)}${r.scorers || 'Sin goleadores cargados'}</div>
+          ${isAdmin ? `<button class="reopen-btn" style="margin-top:8px;" onclick="deleteLealResult('${r.id}')">${icon('undo', 13)}Borrar</button>` : ''}
+        </div>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+  container.innerHTML = html;
+}
+
 let editingMatchId = null;
 function startEditMatch(matchId) {
   editingMatchId = matchId;
@@ -866,6 +1058,7 @@ function renderAdmin() {
     : '<option value="">Todavía no hay jugadores</option>';
   if (users.some((u) => u.name === previousChipsSelection)) chipsSel.value = previousChipsSelection;
   onChipsUserChange();
+  renderLealHistoryAccessList();
 
   const teamsList = document.getElementById('teamsList');
   teamsList.innerHTML = STATE.teams.length
@@ -1034,6 +1227,7 @@ function renderAll(skipAdmin) {
     if (!(skipAdmin && editingMatchId)) renderMatches();
     renderMyBets();
     renderRanking();
+    renderLealHistory();
     if (!skipAdmin && isAdmin) renderAdmin();
     renderCartBar();
   } catch (e) {
@@ -1593,6 +1787,7 @@ function renderMines() {
     document.getElementById('adminGate').style.display = 'none';
     document.getElementById('adminContent').style.display = 'block';
     renderAdmin();
+    renderLealHistory(); // para que aparezca ya el botón de borrar en el historial
   }
 
   connectSocket();

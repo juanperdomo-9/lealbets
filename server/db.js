@@ -95,12 +95,28 @@ CREATE TABLE IF NOT EXISTS mines_games (
   state JSONB NOT NULL,
   updated_at BIGINT NOT NULL
 );
+
+-- Cuaderno de resultados históricos de Leal FC contra cualquier rival (esté
+-- cargado como equipo "oficial" del torneo o no). No tiene relación con la
+-- tabla matches ni con el sistema de apuestas: cualquier usuario puede
+-- agregar una fila desde el footer de la página.
+CREATE TABLE IF NOT EXISTS leal_results (
+  id TEXT PRIMARY KEY,
+  opponent TEXT NOT NULL,
+  leal_goals INTEGER NOT NULL,
+  opponent_goals INTEGER NOT NULL,
+  scorers TEXT,
+  played_on TEXT,
+  created_by TEXT,
+  created_at BIGINT NOT NULL
+);
 `;
 
 // Migraciones chiquitas y seguras para bases ya desplegadas (no tocan datos existentes).
 const MIGRATIONS = `
 ALTER TABLE bets ADD COLUMN IF NOT EXISTS super_boost_id TEXT REFERENCES super_boosts(id);
 ALTER TABLE matches ADD COLUMN IF NOT EXISTS pre_match_ratings JSONB;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS can_log_leal_history BOOLEAN NOT NULL DEFAULT FALSE;
 `;
 
 async function initSchema() {

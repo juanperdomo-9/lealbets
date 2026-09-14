@@ -31,9 +31,9 @@ async function loadMatches(client = pool) {
 
 async function loadRanking(client = pool) {
   const { rows } = await client.query(
-    'SELECT name, balance FROM users ORDER BY balance DESC, name ASC'
+    'SELECT name, balance, can_log_leal_history FROM users ORDER BY balance DESC, name ASC'
   );
-  return rows.map((r) => ({ name: r.name, balance: Number(r.balance) }));
+  return rows.map((r) => ({ name: r.name, balance: Number(r.balance), canLogLealHistory: r.can_log_leal_history }));
 }
 
 // { [playerName]: [ {atajadas, faltas, remates, remates_arco, gol, asistencia, amarilla, roja}, ... ] }
@@ -96,13 +96,34 @@ async function loadActiveSuperBoosts(client = pool) {
     });
 }
 
+function rowToLealResult(r) {
+  return {
+    id: r.id,
+    opponent: r.opponent,
+    lealGoals: r.leal_goals,
+    opponentGoals: r.opponent_goals,
+    scorers: r.scorers || '',
+    playedOn: r.played_on || '',
+    createdBy: r.created_by,
+    createdAt: Number(r.created_at),
+  };
+}
+
+// Historial libre de resultados de Leal FC (footer, cualquier usuario puede cargar
+// filas): no depende de la tabla matches, así que sirve también contra rivales que
+// nunca se programaron como partido "oficial" del torneo.
+async function loadLealResults(client = pool) {
+  const { rows } = await client.query('SELECT * FROM leal_results ORDER BY created_at DESC');
+  return rows.map(rowToLealResult);
+}
+
 async function getPublicState() {
-  const [teams, matches, ranking, superBoosts, marketClosed] = await Promise.all([
-    loadTeams(), loadMatches(), loadRanking(), loadActiveSuperBoosts(), isMarketClosed(),
+  const [teams, matches, ranking, superBoosts, marketClosed, lealResults] = await Promise.all([
+    loadTeams(), loadMatches(), loadRanking(), loadActiveSuperBoosts(), isMarketClosed(), loadLealResults(),
   ]);
   return {
     teams, matches, ranking, lealPlayerOrder: LEAL_PLAYER_ORDER, superBoosts,
-    maxSuperBoostStake: MAX_SUPERBOOST_STAKE, marketClosed,
+    maxSuperBoostStake: MAX_SUPERBOOST_STAKE, marketClosed, lealResults,
   };
 }
 
@@ -114,5 +135,7 @@ module.exports = {
   loadPlayerHistoryMap,
   syncLealProps,
   loadActiveSuperBoosts,
+  rowToLealResult,
+  loadLealResults,
   getPublicState,
 };

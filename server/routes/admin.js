@@ -30,6 +30,26 @@ router.post('/users/:name/chips', async (req, res) => {
   }
 });
 
+// Habilitar (o quitarle) a un usuario el permiso de cargar resultados en el
+// historial de Leal FC del footer (por defecto nadie lo tiene, ni siquiera
+// jugadores nuevos: el admin decide a quién se lo da).
+router.post('/users/:name/leal-history-access', async (req, res) => {
+  try {
+    const name = req.params.name;
+    const allowed = !!req.body.allowed;
+    const { rows } = await pool.query(
+      'UPDATE users SET can_log_leal_history=$1 WHERE name=$2 RETURNING name',
+      [allowed, name]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+    broadcastStateUpdate();
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 router.post('/teams', async (req, res) => {
   try {
     const name = String(req.body.name || '').trim();

@@ -49,14 +49,6 @@
     </div>
   </header>
 
-  <nav class="tabs">
-    <button data-tab="matches" class="active">Partidos</button>
-    <button data-tab="mybets">Apuestas</button>
-    <button data-tab="casino">Casino</button>
-    <button data-tab="ranking">Tabla</button>
-    <button data-tab="admin">Equipos</button>
-  </nav>
-
   <main>
     <section id="tab-matches" class="active">
       <div id="marketClosedBanner"></div>
@@ -149,6 +141,37 @@
       </div>
     </section>
 
+    <section id="tab-historial">
+      <p class="leal-history-hint">Tocá un equipo para ver todos los partidos que jugó Leal contra ellos, con resultado y goleadores.</p>
+
+      <div class="card" id="lealHistoryAddForm" style="display:none;">
+        <h3>Agregar resultado</h3>
+        <label>Rival</label>
+        <input id="lhOpponentInput" type="text" list="lhTeamSuggestions" placeholder="Ej: Canilla Libre" maxlength="60">
+        <datalist id="lhTeamSuggestions"></datalist>
+
+        <label>Marcador (Leal FC primero)</label>
+        <div class="result-inline">
+          <input id="lhLealGoals" type="number" min="0" placeholder="Leal">
+          <span class="dash">–</span>
+          <input id="lhOpponentGoals" type="number" min="0" placeholder="Rival">
+        </div>
+
+        <label>Goleadores de Leal (opcional)</label>
+        <input id="lhScorersInput" type="text" placeholder="Ej: Juan Perdomo x2, Pedro Diaz" maxlength="300">
+
+        <label>Fecha (opcional)</label>
+        <input id="lhPlayedOnInput" type="text" placeholder="Ej: 12/09/2026" maxlength="40">
+
+        <button onclick="addLealResult()">Agregar resultado</button>
+      </div>
+      <div id="lealHistoryNoAccessMsg" class="empty" style="display:none;"></div>
+
+      <div class="card leal-history-card">
+        <div id="lealHistoryList"></div>
+      </div>
+    </section>
+
     <section id="tab-ranking">
       <div id="rankingBody"></div>
     </section>
@@ -169,6 +192,13 @@
         <label>Fichas a agregar (poné un número negativo para restar)</label>
         <input id="chipsAmount" type="number" step="1" placeholder="Ej: 5000 o -2000">
         <button onclick="adjustUserChips()">Agregar fichas</button>
+      </div>
+
+      <div class="card">
+        <h3>Historial de Leal FC</h3>
+        <label>Quién puede cargar resultados</label>
+        <div class="field-hint">Los que tildes acá van a poder agregar partidos en la pestaña Historial. El resto solo puede verlo.</div>
+        <div id="lealHistoryAccessList"></div>
       </div>
 
       <div class="card">
@@ -224,6 +254,24 @@
       </div>
     </section>
   </main>
+
+  <footer class="app-footer">
+    <div class="app-footer-shield">CR</div>
+    <div class="app-footer-title">Copa del Rey · Primera A</div>
+    <p class="app-footer-note">Fichas virtuales entre amigos — sin valor monetario real.</p>
+  </footer>
+
+  <nav class="bottom-nav">
+    <div id="moreMenu" class="more-menu" hidden>
+      <button class="tab-btn" data-tab="historial"><span class="icon" id="navIcon-historial"></span><span>Historial</span></button>
+      <button class="tab-btn" data-tab="admin"><span class="icon" id="navIcon-admin"></span><span>Equipos</span></button>
+    </div>
+    <button class="tab-btn active" data-tab="matches"><span class="icon" id="navIcon-matches"></span><span>Partidos</span></button>
+    <button class="tab-btn" data-tab="mybets"><span class="icon" id="navIcon-mybets"></span><span>Apuestas</span></button>
+    <button class="tab-btn" data-tab="casino"><span class="icon" id="navIcon-casino"></span><span>Casino</span></button>
+    <button class="tab-btn" data-tab="ranking"><span class="icon" id="navIcon-ranking"></span><span>Tabla</span></button>
+    <button class="tab-btn" id="navMoreBtn" onclick="toggleMoreMenu(event)"><span class="icon" id="navIcon-more"></span><span>Más</span></button>
+  </nav>
 </div>
 
 <div id="cartBar"></div>

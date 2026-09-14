@@ -31,6 +31,7 @@
   --radius-sm:     10px;
   --font-display:  'Space Grotesk', sans-serif;
   --font-body:     'Work Sans', sans-serif;
+  --bottom-nav-h:  62px;
 }
 *{box-sizing:border-box;}
 html{-webkit-tap-highlight-color:transparent;}
@@ -46,7 +47,7 @@ body{
   background-attachment:fixed;
   min-height:100vh;
 }
-.wrap{max-width:640px;margin:0 auto;padding:0 0 130px;position:relative;}
+.wrap{max-width:640px;margin:0 auto;padding:0 0 calc(var(--bottom-nav-h) + 130px);position:relative;}
 ::selection{background:var(--gold-soft);color:var(--chalk);}
 a{color:var(--gold);}
 .icon{display:inline-flex;align-items:center;justify-content:center;line-height:0;flex:none;}
@@ -112,28 +113,39 @@ h1{
 }
 .switch-player:hover{color:var(--chalk-dim);}
 
-/* ---------------------------------- tabs ---------------------------------- */
-nav.tabs{
-  display:flex; gap:4px;
-  padding:8px; margin:14px 16px 0;
-  background:var(--surface); border:1px solid var(--border-soft);
-  border-radius:999px;
-  position:sticky; top:10px; z-index:5;
-  box-shadow:var(--shadow-sm);
+/* ---------------------------------- tabs: nav fijo abajo + menú "Más" ---------------------------------- */
+.bottom-nav{
+  /* position:fixed también sirve como "containing block" para el .more-menu
+     absolute de acá adentro, así que se ancla solo al nav (centrado con
+     max-width:640px), sin cálculos manuales de porcentajes. */
+  position:fixed; left:0; right:0; bottom:0; z-index:20;
+  max-width:640px; margin:0 auto; height:var(--bottom-nav-h);
+  display:flex; align-items:stretch;
+  background:rgba(15,43,34,0.96); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+  border-top:1px solid var(--border-soft);
+  padding-bottom:env(safe-area-inset-bottom, 0);
 }
-nav.tabs button{
-  flex:1;
-  background:none;border:none;
-  color:var(--chalk-faint);
-  font-family:var(--font-display);
-  font-size:12px; font-weight:600;
-  letter-spacing:0.2px;
-  padding:9px 4px;
-  cursor:pointer;
-  border-radius:999px;
-  transition:background .18s ease, color .18s ease;
+.tab-btn{
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  background:none; border:none; color:var(--chalk-faint); cursor:pointer;
+  font-family:var(--font-display); font-size:10px; font-weight:600; letter-spacing:.2px;
+  padding:6px 2px; transition:color .15s ease;
 }
-nav.tabs button.active{color:var(--ink);background:linear-gradient(160deg, var(--gold), var(--gold-2));box-shadow:var(--shadow-gold);}
+.tab-btn .icon{color:inherit;}
+.tab-btn.active{color:var(--gold);}
+#navMoreBtn.active .icon{color:var(--gold);}
+
+.more-menu{
+  position:absolute; right:8px; bottom:calc(100% + 10px); z-index:21;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-md);
+  box-shadow:var(--shadow-md); padding:6px; min-width:170px;
+}
+.more-menu .tab-btn{
+  flex-direction:row; justify-content:flex-start; gap:10px; width:100%;
+  padding:11px 12px; font-size:13px; border-radius:var(--radius-sm);
+}
+.more-menu .tab-btn:hover{background:var(--surface-hover);}
+.more-menu .tab-btn.active{color:var(--gold);background:var(--gold-soft);}
 
 main{padding:16px 16px 0;}
 section{display:none;}
@@ -340,20 +352,61 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .finished-stat-name{font-family:var(--font-display);font-size:12.5px;font-weight:600;color:var(--chalk);flex:none;}
 .finished-stat-row small{color:var(--chalk-faint);font-size:11.5px;flex:1;text-align:right;}
 
+/* ---------------------------------- pestaña: historial de Leal FC ---------------------------------- */
+.leal-history-hint{font-size:11.5px;color:var(--chalk-faint);margin:2px 2px 14px;line-height:1.5;}
+.leal-history-card{padding-top:6px;padding-bottom:6px;}
+.history-team{border-top:1px solid var(--border-soft);}
+.history-team:first-child{border-top:none;}
+.history-team-name{
+  font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--chalk);
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:12px 2px; margin:0; cursor:pointer;
+  transition:color .15s ease;
+}
+.history-team-name:hover{color:var(--gold);}
+.history-team-name.open{color:var(--gold);}
+.history-team-name.open .player-props-toggle svg{transform:rotate(180deg);}
+.history-team-left{display:flex;align-items:center;gap:10px;min-width:0;flex:1;}
+.history-team-left .crest{width:28px;height:28px;font-size:10px;}
+.history-team-title{text-transform:uppercase;letter-spacing:.3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.history-team-record{
+  font-size:10.5px;color:var(--chalk-faint);font-weight:600;flex:none;
+  background:var(--surface-2);border:1px solid var(--border-soft);border-radius:999px;padding:3px 9px;
+}
+.history-team-name.open .history-team-record{color:var(--gold-2);border-color:var(--gold-2);}
+.history-matches{padding:0 0 12px 2px;}
+.history-match{padding:10px 0;border-top:1px solid var(--border-soft);}
+.history-match:first-child{border-top:none;}
+.history-match-score{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-size:12.5px;color:var(--chalk);margin-bottom:5px;
+}
+.history-match-score .match-id{color:var(--chalk-faint);font-size:10.5px;}
+.history-match-score b{font-family:var(--font-display);color:var(--gold);}
+.history-match-scorers{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--chalk-dim);}
+.history-match-scorers .icon{color:var(--gold-2);flex:none;}
+
 /* ---------------------------------- bet slip / cart ---------------------------------- */
 .slip{margin-top:14px;border-top:1px solid var(--border-soft);padding-top:14px;}
 .slip label{font-size:11.5px;color:var(--chalk-dim);display:block;margin-bottom:7px;font-weight:500;}
-.slip-row{display:flex;gap:8px;align-items:stretch;}
+.slip-row{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;}
 .slip input[type=number]{
-  flex:1;background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--radius-sm);
+  flex:1;min-width:0;background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--radius-sm);
   color:var(--chalk);padding:10px 12px;font-size:15px;font-family:var(--font-body);
 }
 .slip input[type=number]:focus{outline:none;border-color:var(--gold-2);}
 .slip button.confirm{
+  flex:1 0 auto; white-space:nowrap;
   background:linear-gradient(160deg, var(--gold), var(--gold-2));color:var(--ink);border:none;
   padding:10px 18px;font-family:var(--font-display);font-weight:700;border-radius:var(--radius-sm);
   letter-spacing:0.2px;cursor:pointer;box-shadow:var(--shadow-gold);
-  display:flex;align-items:center;gap:6px;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+}
+/* en pantallas muy angostas el input + botón lado a lado no siempre entran
+   cómodos (el botón queda cortado); se apilan uno debajo del otro. */
+@media (max-width:360px){
+  .slip-row{flex-direction:column;}
+  .slip input[type=number], .slip button.confirm{width:100%;}
 }
 .slip .payout{font-size:12px;color:var(--chalk-dim);margin-top:9px;text-align:center;}
 .slip button.confirm:disabled, .slip input:disabled{
@@ -662,6 +715,10 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .team-line .crest{width:28px;height:28px;font-size:10px;}
 .team-line .name{flex:1;font-weight:500;}
 .team-line .rating{color:var(--chalk-dim);font-family:var(--font-display);font-weight:700;font-size:13px;}
+.leal-access-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;padding:9px 2px;border-bottom:1px solid var(--border-soft);}
+.leal-access-row:last-child{border-bottom:none;}
+.leal-access-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.leal-access-row input[type="checkbox"]{width:auto;flex:none;margin:0;accent-color:var(--gold);}
 .result-inline{display:flex;gap:10px;margin-top:6px;align-items:center;}
 .result-inline input{margin-bottom:0;text-align:center;font-family:var(--font-display);font-weight:700;font-size:16px;}
 .result-inline .dash{color:var(--chalk-faint);font-family:var(--font-display);font-size:18px;}
@@ -696,7 +753,7 @@ section.active{display:block;animation:fadeIn .25s ease;}
 
 /* ---------------------------------- toast ---------------------------------- */
 .toast{
-  position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(8px);
+  position:fixed;bottom:calc(var(--bottom-nav-h) + 14px);left:50%;transform:translateX(-50%) translateY(8px);
   background:var(--surface-2);color:var(--chalk);padding:12px 20px;
   border:1px solid var(--border); border-radius:999px;
   font-family:var(--font-body);font-weight:600;font-size:13px;
@@ -707,14 +764,15 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
 /* ---------------------------------- carrito de combinada ---------------------------------- */
-#cartBar{position:fixed;left:0;right:0;bottom:0;z-index:15;max-width:640px;margin:0 auto;}
+#cartBar{position:fixed;left:0;right:0;bottom:var(--bottom-nav-h);z-index:15;max-width:640px;margin:0 auto;}
 .cart-summary{
   background:rgba(15,43,34,0.92); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
-  border-top:1px solid var(--border); border-radius:20px 20px 0 0;
-  margin:0 10px; padding:14px 18px;
+  border:1px solid var(--border); border-radius:18px;
+  margin:0 10px 8px; padding:14px 18px;
   display:flex;justify-content:space-between;align-items:center;cursor:pointer;
-  box-shadow:0 -10px 30px rgba(0,0,0,.35);
+  box-shadow:0 -6px 24px rgba(0,0,0,.35);
 }
+#cartBar:has(.cart-panel) .cart-summary{border-radius:18px 18px 0 0;border-bottom:none;margin-bottom:0;}
 .cart-summary .info{font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--chalk);display:flex;align-items:center;gap:8px;}
 .cart-summary .info .badge{
   background:linear-gradient(160deg,var(--gold),var(--gold-2));color:var(--ink);
@@ -726,7 +784,8 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .cart-summary .toggle.open .icon svg{transform:rotate(180deg);}
 .cart-panel{
   background:rgba(15,43,34,0.97); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
-  border-top:1px solid var(--border-soft); margin:0 10px; max-height:52vh;overflow-y:auto;padding:6px 18px 18px;
+  border:1px solid var(--border); border-top:1px solid var(--border-soft); border-radius:0 0 18px 18px;
+  margin:0 10px 8px; max-height:52vh;overflow-y:auto;padding:6px 18px 18px;
 }
 .cart-leg{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:11px 0;border-bottom:1px solid var(--border-soft);font-size:13px;}
 .cart-leg small{display:block;color:var(--chalk-faint);font-size:11px;margin-top:3px;}
@@ -779,3 +838,19 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .gate button:hover{transform:translateY(-1px);}
 .gate button:active{transform:translateY(0);}
 .gate-admin-hint{margin-top:26px;font-size:11px;color:var(--chalk-faint);}
+
+/* ---------------------------------- footer de la página ---------------------------------- */
+.app-footer{
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  text-align:center; padding:26px 16px 22px; margin-top:8px;
+  border-top:1px solid var(--border-soft);
+}
+.app-footer-shield{
+  width:30px;height:30px;flex:none;
+  clip-path:polygon(50% 0%,100% 20%,100% 68%,50% 100%,0% 68%,0% 20%);
+  background:var(--surface-2); border:1px solid var(--border-soft);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-weight:700;font-size:10px;color:var(--gold-2);
+}
+.app-footer-title{font-family:var(--font-display);font-weight:600;font-size:12.5px;color:var(--chalk-dim);}
+.app-footer-note{font-size:11px;color:var(--chalk-faint);margin:0;max-width:280px;line-height:1.5;}
