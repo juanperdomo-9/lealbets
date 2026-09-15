@@ -459,13 +459,16 @@ section.active{display:block;animation:fadeIn .25s ease;}
 /* ---------------------------------- formación dibujada de un partido ---------------------------------- */
 .all-matches-row{cursor:default;}
 .pitch-svg{
-  width:100%; aspect-ratio:1/1.15; display:block; margin:10px 0 12px;
+  width:100%; aspect-ratio:1/1.3; display:block; margin:10px 0 12px;
   border-radius:var(--radius-md); overflow:hidden;
-  filter:drop-shadow(0 4px 10px rgba(0,0,0,.3));
+  border:2px solid rgba(255,255,255,.14);
+  filter:drop-shadow(0 6px 16px rgba(0,0,0,.4));
 }
-.pitch-grass{fill:#1d5c3f;}
-.pitch-mark{fill:none;stroke:rgba(255,255,255,.5);stroke-width:0.6;}
-.pitch-player circle{fill:var(--gold);stroke:var(--gold-2);stroke-width:0.5;}
+.pitch-stripe-a{fill:#1d5c3f;}
+.pitch-stripe-b{fill:#1a5438;}
+.pitch-mark{fill:none;stroke:rgba(255,255,255,.55);stroke-width:0.55;}
+.pitch-spot{fill:rgba(255,255,255,.55);}
+.pitch-player circle{stroke:var(--ink);stroke-width:0.6;}
 .pitch-player text{
   font-family:var(--font-display);font-weight:700;font-size:5px;fill:var(--ink);
   text-anchor:middle;dominant-baseline:middle;
@@ -474,7 +477,19 @@ section.active{display:block;animation:fadeIn .25s ease;}
   font-family:var(--font-body)!important;font-weight:600!important;font-size:3.6px!important;
   fill:#fff!important;paint-order:stroke;stroke:rgba(0,0,0,.65);stroke-width:0.7px;
 }
+/* modo editable: cada jugador es tocable, el seleccionado se resalta */
+.pitch-editable .pitch-player{cursor:pointer;}
+.pitch-editable .pitch-player circle{transition:stroke .15s ease, filter .15s ease;}
+.pitch-editable .pitch-player:not(.active) circle{opacity:.9;}
+.pitch-editable .pitch-player.active circle{
+  stroke:#fff; stroke-width:1.5; filter:drop-shadow(0 0 3px rgba(255,255,255,.85));
+}
+@keyframes pitchSlotPulse{0%,100%{opacity:1;}50%{opacity:.6;}}
+.pitch-editable .pitch-player.active{animation:pitchSlotPulse 1.3s ease-in-out infinite;}
+
 .lineup-view, .lineup-editor{padding:12px 0 4px;border-top:1px dashed var(--border-soft);margin-top:8px;}
+.lineup-tap-hint{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--chalk-faint);margin:0 0 4px;}
+.lineup-tap-hint .icon{color:var(--gold-2);flex:none;}
 .lineup-events{font-size:11.5px;color:var(--chalk-dim);margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .lineup-events b{color:var(--chalk);font-weight:600;margin-right:2px;}
 .lineup-events .icon{flex:none;color:var(--gold-2);}
@@ -487,11 +502,26 @@ section.active{display:block;animation:fadeIn .25s ease;}
   width:100%;background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--radius-sm);
   color:var(--chalk);padding:9px 11px;font-size:13px;font-family:var(--font-body);margin-bottom:0;
 }
-.lineup-player-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
-.lineup-player-row label{flex:0 0 92px;margin:0;font-size:10.5px;color:var(--chalk-faint);}
-.lineup-player-row input{flex:1;min-width:0;}
 .sub-row{display:flex;gap:6px;align-items:center;margin-bottom:8px;}
 .sub-row .subOut, .sub-row .subIn{flex:1;min-width:0;}
+
+/* selector de jugador activo: navegar con flechas o tocando la cancha */
+.lineup-slot-editor{display:flex;align-items:flex-end;gap:8px;margin-bottom:14px;}
+.lineup-slot-field{flex:1;min-width:0;}
+.lineup-slot-field label{margin:0 0 5px;color:var(--gold-2);font-weight:600;}
+.lineup-slot-inputs{display:flex;gap:8px;}
+/* ".lineup-editor input[type=text]{width:100%}" tiene más especificidad que
+   una sola clase (mismo patrón de bug ya visto con ".card button"): se
+   refuerza con el contenedor padre para que el ancho fijo/flex gane de verdad. */
+.card .lineup-slot-inputs .lineup-slot-number{width:56px;flex:none;text-align:center;font-family:var(--font-display);font-weight:700;}
+.card .lineup-slot-inputs .lineup-slot-name{width:auto;flex:1;min-width:0;}
+.card .lineup-slot-nav{
+  flex:none;width:38px;height:38px;border-radius:50%;border:1px solid var(--border-soft);
+  background:var(--surface-2);color:var(--chalk);box-shadow:none;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;
+}
+.card .lineup-slot-nav svg{transform:rotate(90deg);}
+.card .lineup-slot-nav-next svg{transform:rotate(-90deg);}
 
 /* ---------------------------------- bet slip / cart ---------------------------------- */
 .slip{margin-top:14px;border-top:1px solid var(--border-soft);padding-top:14px;}

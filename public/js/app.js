@@ -860,24 +860,69 @@ function formationInputLabels(formation) {
     return `${POSITION_NAMES[p.pos] || p.pos} ${counts[p.pos]}`;
   });
 }
-function pitchSvg(formation, players) {
+// cancha con rayado de césped, áreas completas (chica + grande + arco) y
+// banderines de córner, más realista que un rectángulo verde liso. En modo
+// editable (opts.editable), cada jugador es tocable: tocarlo selecciona esa
+// posición para escribirle el nombre (ver selectLineupSlot).
+function pitchSvg(formation, players, opts) {
+  opts = opts || {};
+  const uid = String(opts.matchId || 'v').replace(/[^a-zA-Z0-9]/g, '');
+  const gradId = `pitchGrad-${uid}`;
+  const vignetteId = `pitchVig-${uid}`;
   const positions = FORMATIONS[formation] || FORMATIONS['4-4-2'];
   const dots = positions.map((p, i) => {
-    const name = (players && players[i]) ? String(players[i]).trim() : '';
-    const label = name ? initials(name) : String(i + 1);
+    const player = (players && players[i]) || {};
+    const name = String((typeof player === 'string' ? player : player.name) || '').trim();
+    const number = String((typeof player === 'string' ? '' : player.number) || '').trim();
+    const label = number || String(i + 1); // el dorsal se muestra en vez de iniciales
     const firstName = name ? name.split(' ')[0] : '';
-    return `<g class="pitch-player">
-      <circle cx="${p.x}" cy="${p.y}" r="6.2"></circle>
-      <text x="${p.x}" y="${p.y}">${label}</text>
-      ${firstName ? `<text x="${p.x}" y="${p.y + 10.5}" text-anchor="middle" class="pitch-player-name">${firstName}</text>` : ''}
+    const isActive = opts.editable && opts.activeSlot === i;
+    const clickAttr = opts.editable ? ` onclick="selectLineupSlot('${opts.matchId}', ${i})"` : '';
+    return `<g class="pitch-player${isActive ? ' active' : ''}"${clickAttr}>
+      <circle cx="${p.x}" cy="${p.y}" r="6.3" fill="url(#${gradId})"></circle>
+      <text id="pitchLabel-${uid}-${i}" x="${p.x}" y="${p.y}">${label}</text>
+      <text id="pitchName-${uid}-${i}" x="${p.x}" y="${p.y + 10.4}" text-anchor="middle" class="pitch-player-name">${firstName}</text>
     </g>`;
   }).join('');
-  return `<svg viewBox="0 0 100 100" class="pitch-svg" preserveAspectRatio="none">
-    <rect x="1" y="1" width="98" height="98" class="pitch-grass"></rect>
+  // franjas de césped cortado (alternadas) + viñeta suave en los bordes, como
+  // en las gráficas de alineación de las apps de fútbol.
+  let stripes = '';
+  for (let i = 0; i < 8; i++) {
+    stripes += `<rect x="0" y="${i * 12.5}" width="100" height="12.5" class="${i % 2 === 0 ? 'pitch-stripe-a' : 'pitch-stripe-b'}"></rect>`;
+  }
+  return `<svg viewBox="0 0 100 100" class="pitch-svg${opts.editable ? ' pitch-editable' : ''}" preserveAspectRatio="none">
+    <defs>
+      <radialGradient id="${gradId}" cx="35%" cy="30%" r="75%">
+        <stop offset="0%" stop-color="#fbe7b8"></stop>
+        <stop offset="45%" stop-color="#F0C25A"></stop>
+        <stop offset="100%" stop-color="#C8912E"></stop>
+      </radialGradient>
+      <radialGradient id="${vignetteId}" cx="50%" cy="48%" r="72%">
+        <stop offset="55%" stop-color="#000" stop-opacity="0"></stop>
+        <stop offset="100%" stop-color="#000" stop-opacity="0.45"></stop>
+      </radialGradient>
+    </defs>
+    ${stripes}
+    <rect x="1" y="1" width="98" height="98" class="pitch-mark pitch-border"></rect>
     <line x1="1" y1="50" x2="99" y2="50" class="pitch-mark"></line>
     <circle cx="50" cy="50" r="9" class="pitch-mark"></circle>
-    <rect x="24" y="1" width="52" height="13" class="pitch-mark"></rect>
-    <rect x="24" y="86" width="52" height="13" class="pitch-mark"></rect>
+    <circle cx="50" cy="50" r="0.8" class="pitch-spot"></circle>
+    <!-- área grande y chica propia (arquero, abajo) -->
+    <rect x="21" y="83" width="58" height="17" class="pitch-mark"></rect>
+    <rect x="38" y="94" width="24" height="6" class="pitch-mark"></rect>
+    <circle cx="50" cy="89" r="0.8" class="pitch-spot"></circle>
+    <path d="M 39 83 A 11 11 0 0 0 61 83" class="pitch-mark"></path>
+    <!-- área grande y chica rival (arriba) -->
+    <rect x="21" y="0" width="58" height="17" class="pitch-mark"></rect>
+    <rect x="38" y="0" width="24" height="6" class="pitch-mark"></rect>
+    <circle cx="50" cy="11" r="0.8" class="pitch-spot"></circle>
+    <path d="M 39 17 A 11 11 0 0 1 61 17" class="pitch-mark"></path>
+    <!-- banderines de córner -->
+    <path d="M 1 4 A 3 3 0 0 0 4 1" class="pitch-mark"></path>
+    <path d="M 96 1 A 3 3 0 0 0 99 4" class="pitch-mark"></path>
+    <path d="M 99 96 A 3 3 0 0 0 96 99" class="pitch-mark"></path>
+    <path d="M 4 99 A 3 3 0 0 0 1 96" class="pitch-mark"></path>
+    <rect x="0" y="0" width="100" height="100" fill="url(#${vignetteId})"></rect>
     ${dots}
   </svg>`;
 }
@@ -889,14 +934,28 @@ function toggleLealMatchDetail(id) {
 }
 
 // ---------- editor de formación (cancha + cambios + amarillas/rojas + figura) ----------
+// La alineación se carga TOCANDO cada jugador en la cancha (no escribiendo en
+// una lista): tocar un jugador lo selecciona, y un solo campo de texto abajo
+// (con flechas para pasar al anterior/siguiente) sirve para escribirle el
+// nombre. lineupPlayersDraft/lineupActiveSlot son el estado de ese editor
+// mientras está abierto (no se guarda hasta tocar "Guardar formación").
 let editingLineupId = null;
 let lineupFormationDraft = '4-4-2';
+function blankLineupPlayers() { return new Array(11).fill(0).map(() => ({ name: '', number: '' })); }
+let lineupPlayersDraft = blankLineupPlayers();
+let lineupActiveSlot = 0;
 function startEditLineup(id) {
   editingLealMatchId = null; // no mezclar con el editor de resultado del mismo partido
   editingLineupId = id;
   expandedLealMatches.add(id);
   const r = (STATE.lealMatchesPlayed || []).find((x) => x.id === id);
   lineupFormationDraft = (r && r.lineup && r.lineup.formation) || '4-4-2';
+  const existing = (r && r.lineup && r.lineup.formation === lineupFormationDraft && r.lineup.players) || [];
+  lineupPlayersDraft = blankLineupPlayers().map((blank, i) => ({
+    name: (existing[i] && existing[i].name) || '',
+    number: (existing[i] && existing[i].number) || '',
+  }));
+  lineupActiveSlot = 0;
   renderAllMatchesList();
 }
 function cancelEditLineup() {
@@ -907,11 +966,59 @@ function onLineupFormationChange(id) {
   // al cambiar de formación cambia la cantidad/orden de posiciones, así que
   // (por simpleza) se reinicia la alineación titular tipeada hasta ahora.
   lineupFormationDraft = document.getElementById(`lineupFormation-${id}`).value;
+  lineupPlayersDraft = blankLineupPlayers();
+  lineupActiveSlot = 0;
   renderAllMatchesList();
+}
+function focusLineupSlotInput(id) {
+  setTimeout(() => {
+    const inp = document.getElementById(`lineupSlotNameInput-${id}`);
+    if (inp) { inp.focus(); inp.select(); }
+  }, 0);
+}
+// tocar un jugador en la cancha lo selecciona para escribirle el nombre
+function selectLineupSlot(id, index) {
+  lineupActiveSlot = index;
+  renderAllMatchesList();
+  focusLineupSlotInput(id);
+}
+function stepLineupSlot(id, delta) {
+  const total = formationInputLabels(lineupFormationDraft).length;
+  lineupActiveSlot = (lineupActiveSlot + delta + total) % total;
+  renderAllMatchesList();
+  focusLineupSlotInput(id);
+}
+// mientras se tipea, actualiza el dibujo de la cancha en vivo tocando solo los
+// textos de esa posición (no se vuelve a renderizar todo, así no se pierde el
+// foco del campo de texto en cada letra). El dorsal se muestra en el círculo;
+// el nombre (primer nombre) va debajo.
+function refreshPitchSlotVisual(id, index) {
+  const player = lineupPlayersDraft[index] || { name: '', number: '' };
+  const name = (player.name || '').trim();
+  const number = (player.number || '').trim();
+  const uid = String(id).replace(/[^a-zA-Z0-9]/g, '');
+  const labelEl = document.getElementById(`pitchLabel-${uid}-${index}`);
+  const nameEl = document.getElementById(`pitchName-${uid}-${index}`);
+  if (labelEl) labelEl.textContent = number || String(index + 1);
+  if (nameEl) nameEl.textContent = name ? name.split(' ')[0] : '';
+}
+function onLineupSlotNameInput(id, index) {
+  const inp = document.getElementById(`lineupSlotNameInput-${id}`);
+  if (!inp) return;
+  lineupPlayersDraft[index].name = inp.value;
+  refreshPitchSlotVisual(id, index);
+}
+function onLineupSlotNumberInput(id, index) {
+  const inp = document.getElementById(`lineupSlotNumberInput-${id}`);
+  if (!inp) return;
+  lineupPlayersDraft[index].number = inp.value.replace(/[^0-9]/g, '').slice(0, 3);
+  inp.value = lineupPlayersDraft[index].number;
+  refreshPitchSlotVisual(id, index);
 }
 async function saveLineup(id) {
   const formation = document.getElementById(`lineupFormation-${id}`).value;
-  const players = Array.from(document.querySelectorAll(`#lineupPlayers-${id} .lineupPlayerInput`)).map((i) => i.value.trim());
+  const players = lineupPlayersDraft.slice(0, 11).map((p) => ({ name: (p.name || '').trim(), number: (p.number || '').trim() }));
+  while (players.length < 11) players.push({ name: '', number: '' });
   const subs = collectSubRows(`lineupSubs-${id}`);
   const yellows = collectSimpleNameRows(`lineupYellows-${id}`);
   const reds = collectSimpleNameRows(`lineupReds-${id}`);
@@ -934,12 +1041,7 @@ function buildLineupSectionHtml(r) {
   if (editingLineupId === r.id) {
     const formation = lineupFormationDraft;
     const labels = formationInputLabels(formation);
-    const existingPlayers = (lineup && lineup.formation === formation && lineup.players) || [];
-    const playerInputs = labels.map((label, i) => `
-      <div class="lineup-player-row">
-        <label>${label}</label>
-        <input type="text" class="lineupPlayerInput" maxlength="40" value="${(existingPlayers[i] || '').replace(/"/g, '&quot;')}">
-      </div>`).join('');
+    const activeSlot = Math.min(lineupActiveSlot, labels.length - 1);
     const subRows = (lineup && lineup.subs || []).map((s) => subRowHtml(s.out, s.in)).join('') || subRowHtml('', '');
     const yellowRows = (lineup && lineup.yellows || []).map((n) => simpleNameRowHtml(n)).join('') || simpleNameRowHtml('');
     const redRows = (lineup && lineup.reds || []).map((n) => simpleNameRowHtml(n)).join('') || simpleNameRowHtml('');
@@ -948,8 +1050,21 @@ function buildLineupSectionHtml(r) {
       <select id="lineupFormation-${r.id}" onchange="onLineupFormationChange('${r.id}')">
         ${Object.keys(FORMATIONS).map((f) => `<option value="${f}" ${f === formation ? 'selected' : ''}>${f}</option>`).join('')}
       </select>
-      ${pitchSvg(formation, existingPlayers)}
-      <div id="lineupPlayers-${r.id}">${playerInputs}</div>
+      <p class="lineup-tap-hint">${icon('users', 13)}Tocá un jugador en la cancha para escribirle el nombre</p>
+      ${pitchSvg(formation, lineupPlayersDraft, { editable: true, matchId: r.id, activeSlot })}
+      <div class="lineup-slot-editor">
+        <button type="button" class="lineup-slot-nav" onclick="stepLineupSlot('${r.id}', -1)">${icon('chevron', 14)}</button>
+        <div class="lineup-slot-field">
+          <label>${labels[activeSlot]}</label>
+          <div class="lineup-slot-inputs">
+            <input type="text" inputmode="numeric" class="lineup-slot-number" id="lineupSlotNumberInput-${r.id}" maxlength="3" placeholder="N°"
+              value="${(lineupPlayersDraft[activeSlot].number || '').replace(/"/g, '&quot;')}" oninput="onLineupSlotNumberInput('${r.id}', ${activeSlot})">
+            <input type="text" class="lineup-slot-name" id="lineupSlotNameInput-${r.id}" maxlength="40" placeholder="Nombre del jugador"
+              value="${(lineupPlayersDraft[activeSlot].name || '').replace(/"/g, '&quot;')}" oninput="onLineupSlotNameInput('${r.id}', ${activeSlot})">
+          </div>
+        </div>
+        <button type="button" class="lineup-slot-nav lineup-slot-nav-next" onclick="stepLineupSlot('${r.id}', 1)">${icon('chevron', 14)}</button>
+      </div>
 
       <label>Figura del partido (opcional)</label>
       <input type="text" id="lineupFigura-${r.id}" maxlength="40" placeholder="Ej: Santiago Suarez" value="${((lineup && lineup.figura) || '').replace(/"/g, '&quot;')}">
@@ -972,9 +1087,9 @@ function buildLineupSectionHtml(r) {
       </div>
     </div>`;
   }
-  if (lineup && lineup.players && lineup.players.some(Boolean)) {
+  if (lineup && lineup.players && lineup.players.some((p) => p && (p.name || p.number))) {
     return `<div class="lineup-view">
-      ${pitchSvg(lineup.formation, lineup.players)}
+      ${pitchSvg(lineup.formation, lineup.players, { matchId: r.id })}
       ${lineup.figura ? `<div class="lineup-events lineup-figura">${icon('star', 13)}Figura: <b>${lineup.figura}</b></div>` : ''}
       ${lineup.subs && lineup.subs.length ? `<div class="lineup-events">${icon('undo', 13)}<b>Cambios:</b> ${lineup.subs.map((s) => `${s.out || '?'} → ${s.in || '?'}`).join(', ')}</div>` : ''}
       ${lineup.yellows && lineup.yellows.length ? `<div class="lineup-events lineup-yellow">${icon('card', 13)}<b>Amarillas:</b> ${lineup.yellows.join(', ')}</div>` : ''}
@@ -1080,7 +1195,7 @@ function aggregateLineupStat(kind) {
     if (!lineup) continue;
     let names = [];
     if (kind === 'played') {
-      const starters = (lineup.players || []).filter(Boolean);
+      const starters = (lineup.players || []).map((p) => (p && p.name) || '').filter(Boolean);
       const subsIn = (lineup.subs || []).map((s) => s.in).filter(Boolean);
       names = Array.from(new Set([...starters, ...subsIn].map((n) => n.trim()).filter(Boolean)));
     } else if (kind === 'yellow') names = lineup.yellows || [];

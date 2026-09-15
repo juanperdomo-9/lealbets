@@ -38,12 +38,21 @@ function parseScorers(input) {
   }
   return out;
 }
-// Cambios: solo "sale" / "entra" (sin minuto, a pedido).
+// Cambios: solo "sale" / "entra" (sin minuto, a pedido). Cada jugador titular
+// es {name, number}: el dorsal se muestra en la cancha en vez de iniciales.
+function cleanNumber(v) {
+  const s = String(v || '').trim().slice(0, 3);
+  return /^[0-9]{1,3}$/.test(s) ? s : '';
+}
 function parseLineup(input) {
   if (!input || typeof input !== 'object') return null;
   const formation = VALID_FORMATIONS.includes(input.formation) ? input.formation : '4-4-2';
-  const players = Array.isArray(input.players) ? input.players.slice(0, 11).map(cleanName) : [];
-  while (players.length < 11) players.push('');
+  const playersRaw = Array.isArray(input.players) ? input.players.slice(0, 11) : [];
+  const players = [];
+  for (let i = 0; i < 11; i++) {
+    const p = playersRaw[i];
+    players.push({ name: cleanName(p && p.name), number: cleanNumber(p && p.number) });
+  }
   const subs = (Array.isArray(input.subs) ? input.subs.slice(0, 20) : [])
     .map((sub) => ({ out: cleanName(sub && sub.out), in: cleanName(sub && sub.in) }))
     .filter((sub) => sub.out || sub.in);
