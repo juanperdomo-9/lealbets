@@ -477,6 +477,12 @@ section.active{display:block;animation:fadeIn .25s ease;}
   font-family:var(--font-body)!important;font-weight:600!important;font-size:3.6px!important;
   fill:#fff!important;paint-order:stroke;stroke:rgba(0,0,0,.65);stroke-width:0.7px;
 }
+/* brazalete de capitán: insignia chica arriba a la derecha del círculo */
+.pitch-captain-badge{fill:#1b3a2e;stroke:#fff;stroke-width:0.5;}
+.pitch-captain-text{
+  font-family:var(--font-display)!important;font-weight:700!important;font-size:3px!important;
+  fill:#fff!important;text-anchor:middle;dominant-baseline:middle;
+}
 /* modo editable: cada jugador es tocable, el seleccionado se resalta */
 .pitch-editable .pitch-player{cursor:pointer;}
 .pitch-editable .pitch-player circle{transition:stroke .15s ease, filter .15s ease;}

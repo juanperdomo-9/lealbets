@@ -877,11 +877,19 @@ function pitchSvg(formation, players, opts) {
     const label = number || String(i + 1); // el dorsal se muestra en vez de iniciales
     const firstName = name ? name.split(' ')[0] : '';
     const isActive = opts.editable && opts.activeSlot === i;
+    const isCaptain = opts.captainIndex === i;
     const clickAttr = opts.editable ? ` onclick="selectLineupSlot('${opts.matchId}', ${i})"` : '';
+    // brazalete de capitán: una insignia chica arriba a la derecha del círculo
+    const captainBadge = isCaptain
+      ? `<circle id="pitchCaptain-${uid}-${i}" cx="${p.x + 4.6}" cy="${p.y - 4.6}" r="2.3" class="pitch-captain-badge"></circle>
+         <text id="pitchCaptainText-${uid}-${i}" x="${p.x + 4.6}" y="${p.y - 4.6}" class="pitch-captain-text">C</text>`
+      : `<circle id="pitchCaptain-${uid}-${i}" cx="${p.x + 4.6}" cy="${p.y - 4.6}" r="2.3" class="pitch-captain-badge" style="display:none;"></circle>
+         <text id="pitchCaptainText-${uid}-${i}" x="${p.x + 4.6}" y="${p.y - 4.6}" class="pitch-captain-text" style="display:none;">C</text>`;
     return `<g class="pitch-player${isActive ? ' active' : ''}"${clickAttr}>
       <circle cx="${p.x}" cy="${p.y}" r="6.3" fill="url(#${gradId})"></circle>
       <text id="pitchLabel-${uid}-${i}" x="${p.x}" y="${p.y}">${label}</text>
       <text id="pitchName-${uid}-${i}" x="${p.x}" y="${p.y + 10.4}" text-anchor="middle" class="pitch-player-name">${firstName}</text>
+      ${captainBadge}
     </g>`;
   }).join('');
   // franjas de césped cortado (alternadas) + viñeta suave en los bordes, como
@@ -944,6 +952,7 @@ let lineupFormationDraft = '4-4-2';
 function blankLineupPlayers() { return new Array(11).fill(0).map(() => ({ name: '', number: '' })); }
 let lineupPlayersDraft = blankLineupPlayers();
 let lineupActiveSlot = 0;
+let lineupCaptainDraft = null;
 function startEditLineup(id) {
   editingLealMatchId = null; // no mezclar con el editor de resultado del mismo partido
   editingLineupId = id;
@@ -956,6 +965,9 @@ function startEditLineup(id) {
     number: (existing[i] && existing[i].number) || '',
   }));
   lineupActiveSlot = 0;
+  lineupCaptainDraft = (r && r.lineup && r.lineup.formation === lineupFormationDraft && Number.isInteger(r.lineup.captainIndex))
+    ? r.lineup.captainIndex
+    : null;
   renderAllMatchesList();
 }
 function cancelEditLineup() {
@@ -968,6 +980,12 @@ function onLineupFormationChange(id) {
   lineupFormationDraft = document.getElementById(`lineupFormation-${id}`).value;
   lineupPlayersDraft = blankLineupPlayers();
   lineupActiveSlot = 0;
+  lineupCaptainDraft = null;
+  renderAllMatchesList();
+}
+// marca/desmarca al jugador actualmente seleccionado en la cancha como capitán
+function toggleLineupCaptain(id, index) {
+  lineupCaptainDraft = lineupCaptainDraft === index ? null : index;
   renderAllMatchesList();
 }
 function focusLineupSlotInput(id) {
@@ -1024,7 +1042,7 @@ async function saveLineup(id) {
   const reds = collectSimpleNameRows(`lineupReds-${id}`);
   const figura = document.getElementById(`lineupFigura-${id}`).value.trim();
   try {
-    await apiFetch(`/leal-matches/${id}/lineup`, { method: 'PUT', body: { lineup: { formation, players, subs, yellows, reds, figura } } });
+    await apiFetch(`/leal-matches/${id}/lineup`, { method: 'PUT', body: { lineup: { formation, players, subs, yellows, reds, figura, captainIndex: lineupCaptainDraft } } });
     editingLineupId = null;
     await loadState();
     renderAll();
@@ -1051,7 +1069,7 @@ function buildLineupSectionHtml(r) {
         ${Object.keys(FORMATIONS).map((f) => `<option value="${f}" ${f === formation ? 'selected' : ''}>${f}</option>`).join('')}
       </select>
       <p class="lineup-tap-hint">${icon('users', 13)}Tocá un jugador en la cancha para escribirle el nombre</p>
-      ${pitchSvg(formation, lineupPlayersDraft, { editable: true, matchId: r.id, activeSlot })}
+      ${pitchSvg(formation, lineupPlayersDraft, { editable: true, matchId: r.id, activeSlot, captainIndex: lineupCaptainDraft })}
       <div class="lineup-slot-editor">
         <button type="button" class="lineup-slot-nav" onclick="stepLineupSlot('${r.id}', -1)">${icon('chevron', 14)}</button>
         <div class="lineup-slot-field">
@@ -1065,6 +1083,7 @@ function buildLineupSectionHtml(r) {
         </div>
         <button type="button" class="lineup-slot-nav lineup-slot-nav-next" onclick="stepLineupSlot('${r.id}', 1)">${icon('chevron', 14)}</button>
       </div>
+      <button type="button" class="reopen-btn" onclick="toggleLineupCaptain('${r.id}', ${activeSlot})">${icon('star', 13)}${lineupCaptainDraft === activeSlot ? 'Quitar de capitán' : 'Marcar como capitán'}</button>
 
       <label>Figura del partido (opcional)</label>
       <input type="text" id="lineupFigura-${r.id}" maxlength="40" placeholder="Ej: Santiago Suarez" value="${((lineup && lineup.figura) || '').replace(/"/g, '&quot;')}">
@@ -1089,7 +1108,7 @@ function buildLineupSectionHtml(r) {
   }
   if (lineup && lineup.players && lineup.players.some((p) => p && (p.name || p.number))) {
     return `<div class="lineup-view">
-      ${pitchSvg(lineup.formation, lineup.players, { matchId: r.id })}
+      ${pitchSvg(lineup.formation, lineup.players, { matchId: r.id, captainIndex: lineup.captainIndex })}
       ${lineup.figura ? `<div class="lineup-events lineup-figura">${icon('star', 13)}Figura: <b>${lineup.figura}</b></div>` : ''}
       ${lineup.subs && lineup.subs.length ? `<div class="lineup-events">${icon('undo', 13)}<b>Cambios:</b> ${lineup.subs.map((s) => `${s.out || '?'} → ${s.in || '?'}`).join(', ')}</div>` : ''}
       ${lineup.yellows && lineup.yellows.length ? `<div class="lineup-events lineup-yellow">${icon('card', 13)}<b>Amarillas:</b> ${lineup.yellows.join(', ')}</div>` : ''}

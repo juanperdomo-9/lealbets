@@ -59,7 +59,9 @@ function parseLineup(input) {
   const yellows = (Array.isArray(input.yellows) ? input.yellows.slice(0, 30) : []).map(cleanName).filter(Boolean);
   const reds = (Array.isArray(input.reds) ? input.reds.slice(0, 30) : []).map(cleanName).filter(Boolean);
   const figura = cleanName(input.figura);
-  return { formation, players, subs, yellows, reds, figura };
+  const captainIndexNum = parseInt(input.captainIndex, 10);
+  const captainIndex = Number.isInteger(captainIndexNum) && captainIndexNum >= 0 && captainIndexNum <= 10 ? captainIndexNum : null;
+  return { formation, players, subs, yellows, reds, figura, captainIndex };
 }
 
 router.post('/', requireAuth, requireLealHistoryAccess, async (req, res) => {
