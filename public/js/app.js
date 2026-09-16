@@ -885,10 +885,14 @@ function pitchSvg(formation, players, opts) {
          <text id="pitchCaptainText-${uid}-${i}" x="${p.x + 4.6}" y="${p.y - 4.6}" class="pitch-captain-text">C</text>`
       : `<circle id="pitchCaptain-${uid}-${i}" cx="${p.x + 4.6}" cy="${p.y - 4.6}" r="2.3" class="pitch-captain-badge" style="display:none;"></circle>
          <text id="pitchCaptainText-${uid}-${i}" x="${p.x + 4.6}" y="${p.y - 4.6}" class="pitch-captain-text" style="display:none;">C</text>`;
+    // el nombre va debajo del círculo, salvo que no entre (el arquero está
+    // pegado al borde de abajo de la cancha): ahí se pone arriba, si no queda
+    // recortado fuera del dibujo y no se ve.
+    const nameY = (p.y + 10.4 <= 96.5) ? p.y + 10.4 : p.y - 8.6;
     return `<g class="pitch-player${isActive ? ' active' : ''}"${clickAttr}>
       <circle cx="${p.x}" cy="${p.y}" r="6.3" fill="url(#${gradId})"></circle>
       <text id="pitchLabel-${uid}-${i}" x="${p.x}" y="${p.y}">${label}</text>
-      <text id="pitchName-${uid}-${i}" x="${p.x}" y="${p.y + 10.4}" text-anchor="middle" class="pitch-player-name">${firstName}</text>
+      <text id="pitchName-${uid}-${i}" x="${p.x}" y="${nameY}" text-anchor="middle" class="pitch-player-name">${firstName}</text>
       ${captainBadge}
     </g>`;
   }).join('');
