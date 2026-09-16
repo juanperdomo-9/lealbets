@@ -96,6 +96,15 @@ CREATE TABLE IF NOT EXISTS mines_games (
   updated_at BIGINT NOT NULL
 );
 
+-- ronda bonus de giros gratis de la tragamonedas en curso (si hay una fila,
+-- hay giros gratis pendientes de jugar); un giro normal del juego base no
+-- pasa por acá, se resuelve solo en el momento.
+CREATE TABLE IF NOT EXISTS slots_games (
+  user_name TEXT PRIMARY KEY REFERENCES users(name),
+  state JSONB NOT NULL,
+  updated_at BIGINT NOT NULL
+);
+
 -- Cuaderno de resultados históricos de Leal FC contra cualquier rival (esté
 -- cargado como equipo "oficial" del torneo o no). No tiene relación con la
 -- tabla matches ni con el sistema de apuestas: cualquier usuario puede

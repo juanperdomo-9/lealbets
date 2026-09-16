@@ -2143,6 +2143,7 @@ function setCasinoView(view) {
   if (view === 'blackjack') bjLoadState();
   else if (view === 'penalty') pnLoadState();
   else if (view === 'mines') mnLoadState();
+  else if (view === 'slots') slLoadState();
 }
 
 // ---------- penales (tanda de penaltis) ----------
@@ -2462,6 +2463,224 @@ function renderMines() {
   }
 }
 
+// ---------- tragamonedas ----------
+// juego original de Leal Bets (5 rodillos x 3 filas, 10 líneas fijas), no es
+// ninguna tragamonedas real: el servidor decide siempre qué sale (ver
+// server/slots.js), acá solo se anima y se muestra.
+// mismas 10 líneas que server/slots.js — SOLO para dibujar qué casilleros
+// resaltar cuando gana una línea, no decide nada del juego.
+const SL_PAYLINES = [
+  [1, 1, 1, 1, 1], [0, 0, 0, 0, 0], [2, 2, 2, 2, 2],
+  [0, 1, 2, 1, 0], [2, 1, 0, 1, 2], [0, 0, 1, 2, 2],
+  [2, 2, 1, 0, 0], [1, 0, 0, 0, 1], [1, 2, 2, 2, 1], [0, 1, 1, 1, 0],
+];
+// mismos símbolos y pagos que server/slots.js — SOLO para mostrar la
+// tablita de pagos y dibujar cada símbolo, no decide nada del juego.
+const SL_SYMBOLS = {
+  CHIP_W: { label: 'Ficha blanca', pay: { 3: 4, 4: 9, 5: 27 }, cls: 'sl-chip-w' },
+  CHIP_G: { label: 'Ficha verde', pay: { 3: 5, 4: 14, 5: 36 }, cls: 'sl-chip-g' },
+  CHIP_B: { label: 'Ficha azul', pay: { 3: 7, 4: 18, 5: 45 }, cls: 'sl-chip-b' },
+  CHIP_R: { label: 'Ficha roja', pay: { 3: 9, 4: 22, 5: 54 }, cls: 'sl-chip-r' },
+  BALL: { label: 'Pelota', pay: { 3: 14, 4: 36, 5: 90 }, icon: 'ball' },
+  CUP: { label: 'Copa', pay: { 3: 22, 4: 54, 5: 144 }, icon: 'trophy' },
+  CREST: { label: 'Escudo', pay: { 3: 36, 4: 90, 5: 270 }, crest: true },
+  WILD: { label: 'Comodín', pay: { 3: 45, 4: 108, 5: 360 }, icon: 'star', cls: 'sl-wild' },
+  SCATTER: { label: 'Arco (scatter)', pay: {}, icon: 'goal', cls: 'sl-scatter' },
+};
+const SL_SCATTER_PAY = { 3: 4, 4: 18, 5: 90 };
+const SL_SCATTER_SPINS = { 3: 8, 4: 10, 5: 12 };
+
+let SL = { spinning: false, bonus: null }; // bonus: {freeSpinsLeft, totalFreeSpins, collected, stake} | null
+let slGridCache = null; // último grid mostrado (para no perderlo al re-renderizar entre giros gratis)
+
+function slSymbolHtml(id, value) {
+  const meta = SL_SYMBOLS[id];
+  if (id === 'MULT') return `<div class="sl-sym sl-mult">×${value}</div>`;
+  if (!meta) return `<div class="sl-sym"></div>`;
+  if (meta.crest) return `<div class="sl-sym sl-crest"><img src="/img/icons/icon-152.png" alt=""></div>`;
+  if (meta.icon) return `<div class="sl-sym ${meta.cls || ''}">${icon(meta.icon, 26)}</div>`;
+  return `<div class="sl-sym ${meta.cls || ''}"></div>`;
+}
+function slRandomSymbolHtml() {
+  const ids = Object.keys(SL_SYMBOLS);
+  return slSymbolHtml(ids[Math.floor(Math.random() * ids.length)]);
+}
+
+function slPopulatePaytable() {
+  const box = document.getElementById('slPaytable');
+  if (!box || box.children.length) return;
+  const rows = Object.values(SL_SYMBOLS).filter((s) => s.pay[3]).map((s) => `
+    <div class="bj-pay-row"><b>${s.label}</b><span>x3 ${s.pay[3]} · x4 ${s.pay[4]} · x5 ${s.pay[5]}</span></div>
+  `).join('');
+  const scatterRow = `<div class="bj-pay-row"><b>Arco (en cualquier lado)</b><span>x3 ${SL_SCATTER_PAY[3]} · x4 ${SL_SCATTER_PAY[4]} · x5 ${SL_SCATTER_PAY[5]} + giros gratis</span></div>`;
+  box.innerHTML = rows + scatterRow;
+}
+
+// arma la grilla de 15 casilleros (5x4... en realidad 5 columnas x 3 filas)
+// en orden de lectura fila por fila; opts.winCells es un Set de "col-fila"
+// para resaltar los casilleros de las líneas ganadoras.
+function slGridHtml(grid, opts) {
+  opts = opts || {};
+  const winCells = opts.winCells || new Set();
+  const valuesByCell = opts.valuesByCell || {};
+  let html = '';
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 5; c++) {
+      const sym = grid[c][r];
+      const key = `${c}-${r}`;
+      const value = valuesByCell[key];
+      const cellHtml = sym === 'MULT' ? slSymbolHtml('MULT', value) : slSymbolHtml(sym);
+      html += winCells.has(key) ? cellHtml.replace('class="sl-sym', 'class="sl-sym sl-win') : cellHtml;
+    }
+  }
+  return html;
+}
+function slSpinningGridHtml() {
+  let html = '';
+  for (let i = 0; i < 15; i++) html += slRandomSymbolHtml();
+  return html;
+}
+
+function slResultText(lineWins, scatterCount, scatterWin) {
+  const parts = [];
+  if (lineWins && lineWins.length) {
+    parts.push(`${lineWins.length} línea${lineWins.length > 1 ? 's' : ''} ganadora${lineWins.length > 1 ? 's' : ''}`);
+  }
+  if (scatterCount >= 3) parts.push(`${scatterCount} arcos (${scatterWin} fichas)`);
+  return parts.join(' + ');
+}
+
+async function slLoadState() {
+  if (!ME) { renderSlots(); return; }
+  try {
+    const state = await apiFetch('/slots/state');
+    SL.bonus = state.bonus;
+  } catch (e) { /* ignorar, se reintenta solo */ }
+  renderSlots();
+  if (SL.bonus && SL.bonus.freeSpinsLeft > 0 && !SL.spinning) slRunBonusLoop();
+}
+
+async function slSpin() {
+  if (!ME) { toast('Entrá con tu usuario para jugar'); return; }
+  if (SL.spinning || SL.bonus) return;
+  const stake = parseInt(document.getElementById('slStakeInput').value, 10);
+  if (!stake || stake <= 0) { toast('Poné un monto válido'); return; }
+
+  SL.spinning = true;
+  renderSlots();
+  try {
+    const [result] = await Promise.all([
+      apiFetch('/slots/spin', { method: 'POST', body: { stake } }),
+      sleep(650), // tiempo mínimo de giro antes de mostrar el resultado real
+    ]);
+    applyBalanceUpdate(result.balance);
+    slGridCache = result.grid;
+
+    const winCells = new Set();
+    (result.lineWins || []).forEach((w) => {
+      const rowsForLine = SL_PAYLINES[w.line];
+      for (let c = 0; c < w.count; c++) winCells.add(`${c}-${rowsForLine[c]}`);
+    });
+    SL.lastWinCells = winCells;
+    SL.lastValuesByCell = {};
+    SL.lastResultText = result.totalWin > 0 ? `¡Ganaste ${result.totalWin} fichas! ${slResultText(result.lineWins, result.scatterCount, result.scatterWin)}`.trim() : '';
+    SL.bonus = result.bonus;
+    SL.spinning = false;
+    renderSlots();
+
+    if (result.bonus) {
+      toast(`¡Ronda bonus! ${result.bonus.totalFreeSpins} giros gratis`);
+      await sleep(900);
+      slRunBonusLoop();
+    }
+  } catch (e) {
+    SL.spinning = false;
+    renderSlots();
+    toast(e.message);
+  }
+}
+
+// consume los giros gratis uno atrás del otro, animando cada uno, hasta que
+// se terminan y se liquida el premio acumulado.
+async function slRunBonusLoop() {
+  if (SL.spinning) return;
+  SL.spinning = true;
+  while (SL.bonus && SL.bonus.freeSpinsLeft > 0) {
+    renderSlots();
+    let result;
+    try {
+      [result] = await Promise.all([
+        apiFetch('/slots/bonus-spin', { method: 'POST' }),
+        sleep(600),
+      ]);
+    } catch (e) {
+      toast(e.message);
+      SL.bonus = null;
+      break;
+    }
+    slGridCache = result.grid;
+    const multCells = new Set();
+    const valuesByCell = {};
+    (result.hits || []).forEach((h) => { const key = `${h.col}-${h.row}`; multCells.add(key); valuesByCell[key] = h.value; });
+    SL.lastWinCells = multCells;
+    SL.lastValuesByCell = valuesByCell;
+    SL.lastResultText = result.collectedThisSpin > 0 ? `+${result.collectedThisSpin}x acumulado` : '';
+    applyBalanceUpdate(result.balance);
+    if (result.finished) {
+      SL.bonus = null;
+      SL.lastResultText = result.payout > 0
+        ? `¡Ronda bonus terminada! Cobraste ${result.payout} fichas (x${result.totalCollected})`
+        : 'Ronda bonus terminada — no se juntó multiplicador';
+      renderSlots();
+      break;
+    }
+    SL.bonus = { freeSpinsLeft: result.freeSpinsLeft, totalFreeSpins: result.totalFreeSpins, collected: result.totalCollected, stake: SL.bonus.stake };
+    renderSlots();
+    await sleep(250);
+  }
+  SL.spinning = false;
+  renderSlots();
+}
+
+function renderSlots() {
+  const field = document.getElementById('slotsField');
+  const spinBtn = document.getElementById('slSpinBtn');
+  const stakeInput = document.getElementById('slStakeInput');
+  if (!field || !spinBtn || !stakeInput) return;
+  slPopulatePaytable();
+
+  if (!ME) {
+    field.innerHTML = `<div class="empty">${icon('lock', 26)}Entrá con tu usuario para jugar.</div>`;
+    spinBtn.disabled = true; stakeInput.disabled = true;
+    return;
+  }
+
+  const inBonus = !!SL.bonus;
+  spinBtn.disabled = SL.spinning || inBonus;
+  stakeInput.disabled = SL.spinning || inBonus;
+  spinBtn.textContent = inBonus ? 'Girando giros gratis…' : (SL.spinning ? 'Girando…' : 'Girar');
+
+  const bonusBar = inBonus
+    ? `<div class="sl-bonus-bar">${icon('goal', 15)}<span>Giros gratis: <b>${SL.bonus.freeSpinsLeft}</b> / ${SL.bonus.totalFreeSpins}</span><span>Multiplicador acumulado: <b>x${SL.bonus.collected}</b></span></div>`
+    : '';
+
+  let gridHtml;
+  if (SL.spinning && !slGridCache) {
+    gridHtml = slSpinningGridHtml();
+  } else if (slGridCache) {
+    gridHtml = slGridHtml(slGridCache, { winCells: SL.lastWinCells, valuesByCell: SL.lastValuesByCell });
+  } else {
+    gridHtml = slGridHtml([
+      ['CHIP_W', 'BALL', 'CHIP_G'], ['CHIP_G', 'CUP', 'CHIP_B'], ['CHIP_B', 'WILD', 'CHIP_R'],
+      ['CHIP_R', 'CREST', 'CHIP_W'], ['BALL', 'SCATTER', 'CUP'],
+    ]);
+  }
+
+  field.innerHTML = bonusBar
+    + `<div class="sl-reels${SL.spinning ? ' sl-spinning' : ''}${inBonus ? ' sl-bonus-active' : ''}">${gridHtml}</div>`
+    + (SL.lastResultText ? `<div class="sl-result">${SL.lastResultText}</div>` : '');
+}
+
 // ---------- init ----------
 (async function init() {
   await refreshFromServer(true);
@@ -2479,6 +2698,7 @@ function renderMines() {
       await bjLoadState(); // por si había una mano de blackjack a mitad de jugar
       await pnLoadState(); // por si había una tanda de penales a mitad de jugar
       await mnLoadState(); // por si había una partida de minas a mitad de jugar
+      await slLoadState(); // por si había una ronda bonus de tragamonedas a mitad de jugar
     } catch (e) {
       TOKEN = null;
       localStorage.removeItem('lb_token');
@@ -2491,6 +2711,7 @@ function renderMines() {
   renderBlackjack();
   renderPenalty();
   renderMines();
+  renderSlots();
 
   const adminToken = localStorage.getItem('lb_admin_token');
   if (adminToken) {

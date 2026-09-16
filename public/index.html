@@ -81,6 +81,7 @@
         <button data-view="blackjack" class="active" onclick="setCasinoView('blackjack')">Blackjack</button>
         <button data-view="penalty" onclick="setCasinoView('penalty')">Penales</button>
         <button data-view="mines" onclick="setCasinoView('mines')">Minas</button>
+        <button data-view="slots" onclick="setCasinoView('slots')">Tragamonedas</button>
       </div>
 
       <div id="casino-blackjack" class="casino-game active">
@@ -145,6 +146,21 @@
         <div id="minesField" class="mn-field"></div>
         <div id="mnActions" class="bj-actions" style="display:none;">
           <button onclick="mnCashout()">Cobrar</button>
+        </div>
+      </div>
+
+      <div id="casino-slots" class="casino-game">
+        <div class="card">
+          <h3>Tragamonedas</h3>
+          <label>Fichas a apostar</label>
+          <input id="slStakeInput" type="number" min="10" placeholder="Ej: 500">
+          <button id="slSpinBtn" onclick="slSpin()">Girar</button>
+        </div>
+        <div id="slotsField" class="sl-field"></div>
+        <div class="card sl-help">
+          <h3>Pagos (x apuesta por línea, 10 líneas fijas)</h3>
+          <div id="slPaytable"></div>
+          <p class="sl-help-note">3 símbolos <b>Arco</b> en cualquier lado reparten giros gratis, con un multiplicador que se va juntando en cada giro.</p>
         </div>
       </div>
     </section>

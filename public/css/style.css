@@ -847,6 +847,49 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .mn-tile.mine{background:var(--red); color:#fff; cursor:default;}
 .mn-tile.disabled{cursor:default; opacity:.55;}
 
+/* ---------------------------------- casino: tragamonedas ---------------------------------- */
+.sl-field{
+  background:radial-gradient(ellipse at top, var(--surface-2), var(--bg) 75%);
+  border:1px solid var(--border-soft); border-radius:var(--radius-lg);
+  padding:16px 14px; margin-bottom:14px;
+}
+.sl-bonus-bar{
+  display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;
+  background:linear-gradient(160deg, var(--gold-soft), transparent); border:1px solid var(--gold-2);
+  border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:12px;
+  font-family:var(--font-display); font-size:12px; color:var(--chalk-dim);
+}
+.sl-bonus-bar b{color:var(--gold); font-size:13.5px;}
+.sl-bonus-bar .icon{color:var(--gold); flex:none;}
+.sl-reels{
+  display:grid; grid-template-columns:repeat(5, 1fr); gap:6px;
+  background:var(--ink); border:2px solid var(--gold-2); border-radius:var(--radius-md);
+  padding:8px; box-shadow:inset 0 2px 10px rgba(0,0,0,.5);
+}
+.sl-reels.sl-bonus-active{border-color:var(--gold); box-shadow:inset 0 2px 10px rgba(0,0,0,.5), 0 0 18px rgba(240,194,90,.35);}
+.sl-sym{
+  aspect-ratio:1; border-radius:8px; background:var(--surface);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--chalk-dim); transition:transform .15s ease, background .15s ease;
+}
+.sl-reels.sl-spinning .sl-sym{animation:slBlur .12s linear infinite;}
+@keyframes slBlur{from{filter:blur(0px);}50%{filter:blur(2px);}to{filter:blur(0px);}}
+.sl-sym.sl-win{background:linear-gradient(160deg, var(--gold), var(--gold-2)); color:var(--ink); transform:scale(1.06); box-shadow:var(--shadow-gold);}
+.sl-sym.sl-chip-w{background:radial-gradient(circle at 35% 30%, #fff, #cfcfcf 75%); border:2px dashed rgba(0,0,0,.15);}
+.sl-sym.sl-chip-g{background:radial-gradient(circle at 35% 30%, #6EE7A8, var(--green-win) 75%); border:2px dashed rgba(0,0,0,.15);}
+.sl-sym.sl-chip-b{background:radial-gradient(circle at 35% 30%, #7fd0ff, #2E9BD6 75%); border:2px dashed rgba(0,0,0,.15);}
+.sl-sym.sl-chip-r{background:radial-gradient(circle at 35% 30%, #ff9d9d, var(--red) 75%); border:2px dashed rgba(0,0,0,.15);}
+.sl-sym.sl-wild{background:linear-gradient(160deg, var(--gold), var(--gold-2)); color:var(--ink);}
+.sl-sym.sl-scatter{background:var(--surface-2); color:var(--gold); border:1px solid var(--gold-2);}
+.sl-sym.sl-crest img{width:70%;height:70%;object-fit:contain;border-radius:5px;}
+.sl-sym.sl-mult{
+  background:linear-gradient(160deg, var(--gold), var(--gold-2)); color:var(--ink);
+  font-family:var(--font-display); font-weight:700; font-size:15px;
+}
+.sl-result{text-align:center;font-family:var(--font-display);color:var(--gold);margin-top:10px;font-size:14px;font-weight:700;}
+.sl-help-note{font-size:12px;color:var(--chalk-dim);margin-top:10px;}
+.sl-help-note b{color:var(--gold);}
+
 /* ---------------------------------- admin ---------------------------------- */
 .card{
   border:1px solid var(--border-soft);background:var(--surface);
