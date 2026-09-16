@@ -3,7 +3,13 @@
 // (apuestas, saldo, estado del mercado) NUNCA se sirven desde acá — la API y
 // el socket siempre van directo a la red, así nadie ve fichas/resultados
 // desactualizados por culpa de un caché viejo.
-const CACHE_NAME = 'leal-bets-v1';
+// ¡IMPORTANTE! subir este número cada vez que cambie index.html/style.css/
+// app.js: si no, la primera vez que alguien abre la app instalada después de
+// un cambio sigue viendo la versión vieja (el caché solo se termina de
+// actualizar recién en la visita SIGUIENTE) — al cambiar el nombre acá, en
+// cambio, se vacía el caché viejo entero y esa misma visita ya trae todo
+// fresco de la red.
+const CACHE_NAME = 'leal-bets-v2';
 const CORE_ASSETS = [
   '/',
   '/index.html',
