@@ -1335,6 +1335,22 @@ async function saveLealMatchPlayedEdit(id) {
   } catch (e) { toast(e.message); }
 }
 
+// interpreta "Fecha (opcional)" en formato DD/MM/AAAA (lo que pide el placeholder
+// del formulario); devuelve el timestamp o null si está vacío/mal escrito, para
+// poder ordenar "Partidos jugados" por fecha real de partido.
+function parsePlayedOnDate(str) {
+  const s = String(str || '').trim();
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return null;
+  let day = parseInt(m[1], 10);
+  let month = parseInt(m[2], 10);
+  let year = parseInt(m[3], 10);
+  if (year < 100) year += 2000;
+  const dt = new Date(year, month - 1, day);
+  if (dt.getFullYear() !== year || dt.getMonth() !== month - 1 || dt.getDate() !== day) return null;
+  return dt.getTime();
+}
+
 function renderAllMatchesList() {
   const container = document.getElementById('allMatchesList');
   if (!container) return;
@@ -1346,7 +1362,16 @@ function renderAllMatchesList() {
   const scorersRowsEl = document.getElementById('lmScorersRows');
   if (scorersRowsEl && canLog && scorersRowsEl.children.length === 0) addScorerRow('lmScorersRows');
 
-  const results = STATE.lealMatchesPlayed || [];
+  // ordenados por fecha del partido (más reciente primero); los que no tienen
+  // fecha cargada quedan al final, en el orden en que se cargaron.
+  const results = (STATE.lealMatchesPlayed || []).slice().sort((a, b) => {
+    const da = parsePlayedOnDate(a.playedOn);
+    const db = parsePlayedOnDate(b.playedOn);
+    if (da != null && db != null) return db - da;
+    if (da != null) return -1;
+    if (db != null) return 1;
+    return b.createdAt - a.createdAt;
+  });
   if (results.length === 0) {
     container.innerHTML = `<div class="empty">${icon('trophy', 26)}Todavía no cargaron ningún partido acá. ¡Agregá el primero!</div>`;
     return;
