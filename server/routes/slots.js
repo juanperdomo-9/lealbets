@@ -9,6 +9,8 @@ const { requireAuth } = require('../auth');
 const { spinBase, spinBonus } = require('../slots');
 
 const router = express.Router();
+const BUY_BONUS_COST_MULT = 100; // comprar la ronda bonus cuesta 100x lo que apostás
+const BUY_BONUS_FREE_SPINS = 8; // misma cantidad que el disparador natural más chico (3 scatters)
 
 function httpErr(status, message) {
   return Object.assign(new Error(message), { status });
@@ -85,6 +87,40 @@ router.post('/spin', requireAuth, async (req, res) => {
       grid: spin.grid, lineWins: spin.lineWins, scatterCount: spin.scatterCount, scatterWin: spin.scatterWin,
       totalWin: spin.totalWin, bonus, balance,
     });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    console.error(e);
+    res.status(500).json({ error: 'Error del servidor' });
+  } finally {
+    client.release();
+  }
+});
+
+// compra directo la ronda bonus (sin esperar a que salgan 3+ scatters solos):
+// paga 100x la apuesta puesta y arranca con los mismos 8 giros gratis que el
+// disparador natural más chico.
+router.post('/buy-bonus', requireAuth, async (req, res) => {
+  const stake = Number(req.body.stake);
+  if (!Number.isFinite(stake) || stake <= 0) return res.status(400).json({ error: 'Poné un monto válido' });
+  const cost = Math.round(stake * BUY_BONUS_COST_MULT * 100) / 100;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existingBonus = await loadGame(client, req.userName);
+    if (existingBonus) throw httpErr(400, 'Terminá primero los giros gratis');
+    const { rows: urows } = await client.query('SELECT balance FROM users WHERE name=$1 FOR UPDATE', [req.userName]);
+    if (urows.length === 0) throw httpErr(404, 'Usuario no encontrado');
+    if (cost > Number(urows[0].balance)) throw httpErr(400, 'No tenés esa cantidad de fichas');
+    await applyBalanceDelta(client, req.userName, -cost);
+
+    const state = { stake, freeSpinsLeft: BUY_BONUS_FREE_SPINS, totalFreeSpins: BUY_BONUS_FREE_SPINS, collected: 0 };
+    await saveGame(client, req.userName, state);
+
+    await client.query('COMMIT');
+    const balance = await currentBalance(pool, req.userName);
+    res.json({ bonus: bonusView(state), balance });
   } catch (e) {
     await client.query('ROLLBACK');
     if (e.status) return res.status(e.status).json({ error: e.message });

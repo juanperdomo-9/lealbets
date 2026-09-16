@@ -153,14 +153,15 @@
         <div class="card">
           <h3>Tragamonedas</h3>
           <label>Fichas a apostar</label>
-          <input id="slStakeInput" type="number" min="10" placeholder="Ej: 500">
+          <input id="slStakeInput" type="number" min="10" placeholder="Ej: 500" oninput="slUpdateBuyBonusLabel()">
           <button id="slSpinBtn" onclick="slSpin()">Girar</button>
+          <button id="slBuyBonusBtn" class="reopen-btn sl-buy-bonus-btn" onclick="slBuyBonus()">Comprar bonus</button>
         </div>
         <div id="slotsField" class="sl-field"></div>
         <div class="card sl-help">
           <h3>Pagos (x apuesta por línea, 10 líneas fijas)</h3>
           <div id="slPaytable"></div>
-          <p class="sl-help-note">3 símbolos <b>Arco</b> en cualquier lado reparten giros gratis, con un multiplicador que se va juntando en cada giro.</p>
+          <p class="sl-help-note">3 símbolos <b>Arco</b> en cualquier lado reparten giros gratis, con un multiplicador que se va juntando en cada giro. También podés comprar la ronda bonus directo por 100x lo que apuestes.</p>
         </div>
       </div>
     </section>

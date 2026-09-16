@@ -2481,8 +2481,8 @@ const SL_SYMBOLS = {
   CHIP_G: { label: 'Ficha verde', pay: { 3: 5, 4: 14, 5: 36 }, cls: 'sl-chip-g' },
   CHIP_B: { label: 'Ficha azul', pay: { 3: 7, 4: 18, 5: 45 }, cls: 'sl-chip-b' },
   CHIP_R: { label: 'Ficha roja', pay: { 3: 9, 4: 22, 5: 54 }, cls: 'sl-chip-r' },
-  BALL: { label: 'Pelota', pay: { 3: 14, 4: 36, 5: 90 }, icon: 'ball' },
-  CUP: { label: 'Copa', pay: { 3: 22, 4: 54, 5: 144 }, icon: 'trophy' },
+  BALL: { label: 'Pelota', pay: { 3: 14, 4: 36, 5: 90 }, icon: 'ball', cls: 'sl-ball' },
+  CUP: { label: 'Copa', pay: { 3: 22, 4: 54, 5: 144 }, icon: 'trophy', cls: 'sl-cup' },
   CREST: { label: 'Escudo', pay: { 3: 36, 4: 90, 5: 270 }, crest: true },
   WILD: { label: 'Comodín', pay: { 3: 45, 4: 108, 5: 360 }, icon: 'star', cls: 'sl-wild' },
   SCATTER: { label: 'Arco (scatter)', pay: {}, icon: 'goal', cls: 'sl-scatter' },
@@ -2548,6 +2548,43 @@ function slResultText(lineWins, scatterCount, scatterWin) {
   }
   if (scatterCount >= 3) parts.push(`${scatterCount} arcos (${scatterWin} fichas)`);
   return parts.join(' + ');
+}
+
+const SL_BUY_BONUS_COST_MULT = 100; // mismo valor que server/routes/slots.js
+function slUpdateBuyBonusLabel() {
+  const btn = document.getElementById('slBuyBonusBtn');
+  const stakeInput = document.getElementById('slStakeInput');
+  if (!btn || !stakeInput) return;
+  const stake = parseInt(stakeInput.value, 10);
+  btn.textContent = stake > 0 ? `Comprar bonus — ${stake * SL_BUY_BONUS_COST_MULT} fichas` : 'Comprar bonus (100x la apuesta)';
+}
+
+async function slBuyBonus() {
+  if (!ME) { toast('Entrá con tu usuario para jugar'); return; }
+  if (SL.spinning || SL.bonus) return;
+  const stake = parseInt(document.getElementById('slStakeInput').value, 10);
+  if (!stake || stake <= 0) { toast('Poné un monto válido'); return; }
+  const cost = stake * SL_BUY_BONUS_COST_MULT;
+  if (!confirm(`¿Comprar la ronda bonus por ${cost} fichas?`)) return;
+
+  SL.spinning = true;
+  renderSlots();
+  try {
+    const result = await apiFetch('/slots/buy-bonus', { method: 'POST', body: { stake } });
+    applyBalanceUpdate(result.balance);
+    slGridCache = null;
+    SL.lastWinCells = new Set();
+    SL.lastValuesByCell = {};
+    SL.lastResultText = '';
+    SL.bonus = result.bonus;
+    SL.spinning = false;
+    toast(`¡Ronda bonus comprada! ${result.bonus.totalFreeSpins} giros gratis`);
+    slRunBonusLoop();
+  } catch (e) {
+    SL.spinning = false;
+    renderSlots();
+    toast(e.message);
+  }
 }
 
 async function slLoadState() {
@@ -2646,18 +2683,21 @@ function renderSlots() {
   const field = document.getElementById('slotsField');
   const spinBtn = document.getElementById('slSpinBtn');
   const stakeInput = document.getElementById('slStakeInput');
-  if (!field || !spinBtn || !stakeInput) return;
+  const buyBonusBtn = document.getElementById('slBuyBonusBtn');
+  if (!field || !spinBtn || !stakeInput || !buyBonusBtn) return;
   slPopulatePaytable();
+  slUpdateBuyBonusLabel();
 
   if (!ME) {
     field.innerHTML = `<div class="empty">${icon('lock', 26)}Entrá con tu usuario para jugar.</div>`;
-    spinBtn.disabled = true; stakeInput.disabled = true;
+    spinBtn.disabled = true; stakeInput.disabled = true; buyBonusBtn.disabled = true;
     return;
   }
 
   const inBonus = !!SL.bonus;
   spinBtn.disabled = SL.spinning || inBonus;
   stakeInput.disabled = SL.spinning || inBonus;
+  buyBonusBtn.disabled = SL.spinning || inBonus;
   spinBtn.textContent = inBonus ? 'Girando giros gratis…' : (SL.spinning ? 'Girando…' : 'Girar');
 
   const bonusBar = inBonus

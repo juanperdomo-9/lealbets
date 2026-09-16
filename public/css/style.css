@@ -853,6 +853,15 @@ section.active{display:block;animation:fadeIn .25s ease;}
   border:1px solid var(--border-soft); border-radius:var(--radius-lg);
   padding:16px 14px; margin-bottom:14px;
 }
+.card .sl-buy-bonus-btn{
+  width:100%; margin:0 0 12px; background:var(--surface-2); color:var(--chalk);
+  border:1px solid var(--gold-2); box-shadow:none; border-radius:var(--radius-sm);
+  padding:11px 16px; font-family:var(--font-display); font-weight:700; font-size:12.5px;
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  transition:border-color .15s ease, color .15s ease;
+}
+.card .sl-buy-bonus-btn:hover{border-color:var(--gold); color:var(--gold);}
+.card .sl-buy-bonus-btn:disabled{opacity:.55; cursor:default;}
 .sl-bonus-bar{
   display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;
   background:linear-gradient(160deg, var(--gold-soft), transparent); border:1px solid var(--gold-2);
@@ -861,30 +870,53 @@ section.active{display:block;animation:fadeIn .25s ease;}
 }
 .sl-bonus-bar b{color:var(--gold); font-size:13.5px;}
 .sl-bonus-bar .icon{color:var(--gold); flex:none;}
+/* "gabinete" de la máquina: marco metálico dorado con brillo arriba y una
+   sombra interior profunda, como si los rodillos estuvieran hundidos detrás
+   del vidrio — mucho más "máquina" que un simple grid de cuadrados. */
 .sl-reels{
-  display:grid; grid-template-columns:repeat(5, 1fr); gap:6px;
-  background:var(--ink); border:2px solid var(--gold-2); border-radius:var(--radius-md);
-  padding:8px; box-shadow:inset 0 2px 10px rgba(0,0,0,.5);
+  display:grid; grid-template-columns:repeat(5, 1fr); gap:7px;
+  background:
+    linear-gradient(rgba(255,255,255,.05), transparent 40%),
+    radial-gradient(ellipse at 50% -20%, #1c1c1c, #000 70%);
+  border:3px solid var(--gold-2); border-radius:var(--radius-md);
+  padding:10px; box-shadow:inset 0 4px 16px rgba(0,0,0,.7), inset 0 -2px 6px rgba(0,0,0,.5), 0 8px 22px rgba(0,0,0,.35), 0 0 0 1px var(--gold) inset;
+  position:relative;
 }
-.sl-reels.sl-bonus-active{border-color:var(--gold); box-shadow:inset 0 2px 10px rgba(0,0,0,.5), 0 0 18px rgba(240,194,90,.35);}
+.sl-reels.sl-bonus-active{box-shadow:inset 0 4px 16px rgba(0,0,0,.7), inset 0 -2px 6px rgba(0,0,0,.5), 0 0 22px rgba(240,194,90,.45);}
 .sl-sym{
-  aspect-ratio:1; border-radius:8px; background:var(--surface);
+  aspect-ratio:1; border-radius:50%; position:relative;
   display:flex; align-items:center; justify-content:center;
-  color:var(--chalk-dim); transition:transform .15s ease, background .15s ease;
+  color:var(--chalk-dim); transition:transform .15s ease;
+  background:radial-gradient(circle at 34% 28%, var(--surface-hover), var(--surface-2) 55%, var(--ink) 100%);
+  border:2px solid rgba(0,0,0,.4);
+  box-shadow:0 3px 7px rgba(0,0,0,.5), inset 0 2px 3px rgba(255,255,255,.18), inset 0 -4px 7px rgba(0,0,0,.35);
 }
 .sl-reels.sl-spinning .sl-sym{animation:slBlur .12s linear infinite;}
-@keyframes slBlur{from{filter:blur(0px);}50%{filter:blur(2px);}to{filter:blur(0px);}}
-.sl-sym.sl-win{background:linear-gradient(160deg, var(--gold), var(--gold-2)); color:var(--ink); transform:scale(1.06); box-shadow:var(--shadow-gold);}
-.sl-sym.sl-chip-w{background:radial-gradient(circle at 35% 30%, #fff, #cfcfcf 75%); border:2px dashed rgba(0,0,0,.15);}
-.sl-sym.sl-chip-g{background:radial-gradient(circle at 35% 30%, #6EE7A8, var(--green-win) 75%); border:2px dashed rgba(0,0,0,.15);}
-.sl-sym.sl-chip-b{background:radial-gradient(circle at 35% 30%, #7fd0ff, #2E9BD6 75%); border:2px dashed rgba(0,0,0,.15);}
-.sl-sym.sl-chip-r{background:radial-gradient(circle at 35% 30%, #ff9d9d, var(--red) 75%); border:2px dashed rgba(0,0,0,.15);}
-.sl-sym.sl-wild{background:linear-gradient(160deg, var(--gold), var(--gold-2)); color:var(--ink);}
-.sl-sym.sl-scatter{background:var(--surface-2); color:var(--gold); border:1px solid var(--gold-2);}
-.sl-sym.sl-crest img{width:70%;height:70%;object-fit:contain;border-radius:5px;}
+@keyframes slBlur{from{filter:blur(0px);}50%{filter:blur(2.5px);}to{filter:blur(0px);}}
+@keyframes slWinPulse{0%,100%{transform:scale(1.05);}50%{transform:scale(1.14);}}
+.sl-sym.sl-win{
+  background:radial-gradient(circle at 34% 28%, #fff6dc, var(--gold) 50%, var(--gold-2) 100%);
+  color:var(--ink); box-shadow:0 0 16px rgba(240,194,90,.75), inset 0 2px 3px rgba(255,255,255,.5);
+  border-color:#fff6dc; animation:slWinPulse .7s ease-in-out infinite;
+}
+.sl-sym.sl-chip-w{background:radial-gradient(circle at 34% 28%, #ffffff, #d9d9d9 55%, #8f8f8f 100%); color:#3a3a3a;}
+.sl-sym.sl-chip-g{background:radial-gradient(circle at 34% 28%, #b8ffd6, var(--green-win) 55%, #17703f 100%); color:#0b3320;}
+.sl-sym.sl-chip-b{background:radial-gradient(circle at 34% 28%, #c2ecff, #2E9BD6 55%, #175a80 100%); color:#0b2a40;}
+.sl-sym.sl-chip-r{background:radial-gradient(circle at 34% 28%, #ffd0d0, var(--red) 55%, #9c2626 100%); color:#3a0d0d;}
+.sl-sym.sl-chip-w::after, .sl-sym.sl-chip-g::after, .sl-sym.sl-chip-b::after, .sl-sym.sl-chip-r::after{
+  content:''; position:absolute; inset:4px; border-radius:50%; border:2px dashed rgba(255,255,255,.55); pointer-events:none;
+}
+.sl-sym.sl-ball{background:radial-gradient(circle at 34% 28%, #eafff0, #2f7a4d 55%, #123120 100%); color:#eafff0;}
+.sl-sym.sl-cup{background:radial-gradient(circle at 34% 28%, #fff6dc, var(--gold-2) 55%, #6b4712 100%); color:#3a2a08;}
+.sl-sym.sl-wild{background:radial-gradient(circle at 34% 28%, #fff6dc, var(--gold) 45%, var(--gold-2) 100%); color:var(--ink); box-shadow:0 3px 7px rgba(0,0,0,.5), inset 0 2px 3px rgba(255,255,255,.5), 0 0 10px rgba(240,194,90,.4);}
+.sl-sym.sl-scatter{background:radial-gradient(circle at 34% 28%, #3a3320, var(--ink) 70%); color:var(--gold); border-color:var(--gold-2);}
+.sl-sym.sl-crest{background:radial-gradient(circle at 34% 28%, #2a2a2a, #0a0a0a 75%); border-color:var(--gold-2);}
+.sl-sym.sl-crest img{width:76%;height:76%;object-fit:cover;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.6);}
 .sl-sym.sl-mult{
-  background:linear-gradient(160deg, var(--gold), var(--gold-2)); color:var(--ink);
+  background:radial-gradient(circle at 34% 28%, #fff6dc, var(--gold) 45%, var(--gold-2) 100%); color:var(--ink);
   font-family:var(--font-display); font-weight:700; font-size:15px;
+  box-shadow:0 3px 7px rgba(0,0,0,.5), inset 0 2px 3px rgba(255,255,255,.5), 0 0 12px rgba(240,194,90,.5);
+  animation:slWinPulse .9s ease-in-out infinite;
 }
 .sl-result{text-align:center;font-family:var(--font-display);color:var(--gold);margin-top:10px;font-size:14px;font-weight:700;}
 .sl-help-note{font-size:12px;color:var(--chalk-dim);margin-top:10px;}

@@ -98,6 +98,37 @@ async function api(path, { method = 'GET', body, token } = {}) {
     assert(r.status === 200, 'después de la ronda bonus se puede volver a girar normal');
   }
 
+  // ---------- comprar la ronda bonus directo (sin esperar 3+ scatters) ----------
+  r = await api('/slots/buy-bonus', { method: 'POST', token, body: { stake: 0 } });
+  assert(r.status === 400, 'comprar bonus también rechaza apostar 0');
+  const balanceBeforeBuy = (await api('/auth/me', { token })).data.balance;
+  const buyStake = 50;
+  const buyCost = buyStake * 100;
+  r = await api('/slots/buy-bonus', { method: 'POST', token, body: { stake: buyStake } });
+  assert(r.status === 200, 'comprar bonus aceptado');
+  assert(r.data.balance === balanceBeforeBuy - buyCost, 'comprar bonus cobra 100x lo apostado');
+  assert(r.data.bonus.totalFreeSpins === 8, 'comprar bonus siempre da 8 giros gratis');
+  assert(r.data.bonus.freeSpinsLeft === 8, 'arranca con los 8 giros gratis completos');
+  assert(r.data.bonus.collected === 0, 'arranca sin nada juntado todavía');
+
+  // no se puede comprar otro bonus (ni girar) mientras el comprado sigue en juego
+  r = await api('/slots/buy-bonus', { method: 'POST', token, body: { stake: buyStake } });
+  assert(r.status === 400, 'no se puede comprar otro bonus mientras hay uno en juego');
+  r = await api('/slots/spin', { method: 'POST', token, body: { stake: buyStake } });
+  assert(r.status === 400, 'no se puede girar pagando mientras el bonus comprado sigue en juego');
+
+  // consumir los 8 giros gratis del bonus comprado
+  let boughtCollected = 0, boughtLast = null;
+  for (let i = 0; i < 8; i++) {
+    boughtLast = (await api('/slots/bonus-spin', { method: 'POST', token })).data;
+    boughtCollected += boughtLast.collectedThisSpin;
+  }
+  assert(boughtLast.finished, 'el bonus comprado también termina después de sus 8 giros');
+  const expectedBoughtPayout = Math.round(buyStake * boughtLast.totalCollected * 100) / 100;
+  assert(Math.abs(boughtLast.payout - expectedBoughtPayout) < 1e-6, 'el pago del bonus comprado también es la apuesta puesta x lo juntado');
+  r = await api('/slots/state', { token });
+  assert(r.data.bonus === null, 'después del bonus comprado tampoco queda ninguna ronda en juego');
+
   console.log('\n' + (failures === 0 ? 'TODO OK (0 fallos)' : `${failures} FALLO(S)`));
   process.exit(failures === 0 ? 0 : 1);
 })().catch((e) => { console.error('Error en la prueba de humo de tragamonedas:', e); process.exit(1); });
