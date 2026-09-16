@@ -885,10 +885,10 @@ function pitchSvg(formation, players, opts) {
          <text id="pitchCaptainText-${uid}-${i}" x="${p.x + 4.6}" y="${p.y - 4.6}" class="pitch-captain-text">C</text>`
       : `<circle id="pitchCaptain-${uid}-${i}" cx="${p.x + 4.6}" cy="${p.y - 4.6}" r="2.3" class="pitch-captain-badge" style="display:none;"></circle>
          <text id="pitchCaptainText-${uid}-${i}" x="${p.x + 4.6}" y="${p.y - 4.6}" class="pitch-captain-text" style="display:none;">C</text>`;
-    // el nombre va debajo del círculo, salvo que no entre (el arquero está
-    // pegado al borde de abajo de la cancha): ahí se pone arriba, si no queda
-    // recortado fuera del dibujo y no se ve.
-    const nameY = (p.y + 10.4 <= 96.5) ? p.y + 10.4 : p.y - 8.6;
+    // el nombre siempre va debajo del círculo, como en el resto de los
+    // jugadores (el arco tiene lugar de sobra abajo gracias al margen extra
+    // de césped que se agrega después de la línea de fondo).
+    const nameY = p.y + 10.4;
     return `<g class="pitch-player${isActive ? ' active' : ''}"${clickAttr}>
       <circle cx="${p.x}" cy="${p.y}" r="6.3" fill="url(#${gradId})"></circle>
       <text id="pitchLabel-${uid}-${i}" x="${p.x}" y="${p.y}">${label}</text>
@@ -897,12 +897,17 @@ function pitchSvg(formation, players, opts) {
     </g>`;
   }).join('');
   // franjas de césped cortado (alternadas) + viñeta suave en los bordes, como
-  // en las gráficas de alineación de las apps de fútbol.
+  // en las gráficas de alineación de las apps de fútbol. El lienzo mide más
+  // que la cancha dibujada (108 contra 100) para que quede un margen de
+  // césped debajo de la línea de fondo: ahí es donde entra el nombre del
+  // arquero sin quedar recortado ni pisado por su círculo.
+  const PITCH_H = 108;
   let stripes = '';
-  for (let i = 0; i < 8; i++) {
-    stripes += `<rect x="0" y="${i * 12.5}" width="100" height="12.5" class="${i % 2 === 0 ? 'pitch-stripe-a' : 'pitch-stripe-b'}"></rect>`;
+  for (let i = 0; i < Math.ceil(PITCH_H / 12.5); i++) {
+    const y = i * 12.5;
+    stripes += `<rect x="0" y="${y}" width="100" height="${Math.min(12.5, PITCH_H - y)}" class="${i % 2 === 0 ? 'pitch-stripe-a' : 'pitch-stripe-b'}"></rect>`;
   }
-  return `<svg viewBox="0 0 100 100" class="pitch-svg${opts.editable ? ' pitch-editable' : ''}" preserveAspectRatio="none">
+  return `<svg viewBox="0 0 100 ${PITCH_H}" class="pitch-svg${opts.editable ? ' pitch-editable' : ''}" preserveAspectRatio="none">
     <defs>
       <radialGradient id="${gradId}" cx="35%" cy="30%" r="75%">
         <stop offset="0%" stop-color="#fbe7b8"></stop>
@@ -934,7 +939,7 @@ function pitchSvg(formation, players, opts) {
     <path d="M 96 1 A 3 3 0 0 0 99 4" class="pitch-mark"></path>
     <path d="M 99 96 A 3 3 0 0 0 96 99" class="pitch-mark"></path>
     <path d="M 4 99 A 3 3 0 0 0 1 96" class="pitch-mark"></path>
-    <rect x="0" y="0" width="100" height="100" fill="url(#${vignetteId})"></rect>
+    <rect x="0" y="0" width="100" height="${PITCH_H}" fill="url(#${vignetteId})"></rect>
     ${dots}
   </svg>`;
 }

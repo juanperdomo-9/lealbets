@@ -459,7 +459,11 @@ section.active{display:block;animation:fadeIn .25s ease;}
 /* ---------------------------------- formación dibujada de un partido ---------------------------------- */
 .all-matches-row{cursor:default;}
 .pitch-svg{
-  width:100%; aspect-ratio:1/1.3; display:block; margin:10px 0 12px;
+  /* el viewBox mide 100x108 (108 = 100 de cancha + margen de césped abajo
+     para el nombre del arquero); el aspect-ratio se ajusta en la misma
+     proporción (1.3 * 108/100) para que la cancha se vea del mismo tamaño
+     que antes, con el margen como espacio de más. */
+  width:100%; aspect-ratio:1/1.404; display:block; margin:10px 0 12px;
   border-radius:var(--radius-md); overflow:hidden;
   border:2px solid rgba(255,255,255,.14);
   filter:drop-shadow(0 6px 16px rgba(0,0,0,.4));
