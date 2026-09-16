@@ -363,6 +363,19 @@
 // (ícono propio, abre sin la barra del navegador); si falla no rompe nada,
 // la web sigue andando normal.
 if ('serviceWorker' in navigator) {
+  // si esta pestaña ya estaba controlada por un service worker de una visita
+  // anterior y ese control pasa a uno nuevo (subí una versión nueva de la
+  // página), significa que había quedado desactualizada: se recarga sola una
+  // sola vez para traer todo fresco, sin que nadie tenga que cerrar y volver
+  // a abrir la app a mano. En la primera instalación (todavía sin control
+  // previo) no hace falta recargar nada.
+  const hadController = !!navigator.serviceWorker.controller;
+  let refreshedAlready = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || refreshedAlready) return;
+    refreshedAlready = true;
+    location.reload();
+  });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
