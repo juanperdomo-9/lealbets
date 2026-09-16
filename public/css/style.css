@@ -32,6 +32,11 @@
   --font-display:  'Space Grotesk', sans-serif;
   --font-body:     'Work Sans', sans-serif;
   --bottom-nav-h:  62px;
+  /* instalada como app en el iPhone (notch arriba, barrita de inicio abajo):
+     estos dos valen 0 en cualquier navegador normal, así que no cambian nada
+     ahí — solo entran en juego dentro de la app instalada. */
+  --safe-top:      env(safe-area-inset-top, 0px);
+  --safe-bottom:   env(safe-area-inset-bottom, 0px);
 }
 *{box-sizing:border-box;}
 html{-webkit-tap-highlight-color:transparent;}
@@ -46,8 +51,12 @@ body{
     linear-gradient(180deg, var(--bg-radial-1) 0%, var(--bg) 45%, var(--bg-radial-2) 100%);
   background-attachment:fixed;
   min-height:100vh;
+  /* con la barra de estado "black-translucent", esto hace que el fondo
+     oscuro se meta debajo del notch/reloj en vez de dejar esa franja en
+     blanco arriba. */
+  padding-top:var(--safe-top);
 }
-.wrap{max-width:640px;margin:0 auto;padding:0 0 calc(var(--bottom-nav-h) + 130px);position:relative;}
+.wrap{max-width:640px;margin:0 auto;padding:0 0 calc(var(--bottom-nav-h) + var(--safe-bottom) + 130px);position:relative;}
 ::selection{background:var(--gold-soft);color:var(--chalk);}
 a{color:var(--gold);}
 .icon{display:inline-flex;align-items:center;justify-content:center;line-height:0;flex:none;}
@@ -119,11 +128,16 @@ h1{
      absolute de acá adentro, así que se ancla solo al nav (centrado con
      max-width:640px), sin cálculos manuales de porcentajes. */
   position:fixed; left:0; right:0; bottom:0; z-index:20;
-  max-width:640px; margin:0 auto; height:var(--bottom-nav-h);
+  max-width:640px; margin:0 auto;
+  /* la altura suma el margen de abajo del iPhone (barrita de inicio) para
+     que el fondo del nav llegue hasta el borde real de la pantalla en vez
+     de flotar con un hueco debajo; el padding-bottom empuja los botones de
+     vuelta arriba, así ocupan los mismos 62px de siempre. */
+  height:calc(var(--bottom-nav-h) + var(--safe-bottom));
   display:flex; align-items:stretch;
   background:rgba(15,43,34,0.96); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
   border-top:1px solid var(--border-soft);
-  padding-bottom:env(safe-area-inset-bottom, 0);
+  padding-bottom:var(--safe-bottom);
 }
 .tab-btn{
   flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
@@ -900,7 +914,7 @@ section.active{display:block;animation:fadeIn .25s ease;}
 
 /* ---------------------------------- toast ---------------------------------- */
 .toast{
-  position:fixed;bottom:calc(var(--bottom-nav-h) + 14px);left:50%;transform:translateX(-50%) translateY(8px);
+  position:fixed;bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 14px);left:50%;transform:translateX(-50%) translateY(8px);
   background:var(--surface-2);color:var(--chalk);padding:12px 20px;
   border:1px solid var(--border); border-radius:999px;
   font-family:var(--font-body);font-weight:600;font-size:13px;
@@ -911,7 +925,7 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
 /* ---------------------------------- carrito de combinada ---------------------------------- */
-#cartBar{position:fixed;left:0;right:0;bottom:var(--bottom-nav-h);z-index:15;max-width:640px;margin:0 auto;}
+#cartBar{position:fixed;left:0;right:0;bottom:calc(var(--bottom-nav-h) + var(--safe-bottom));z-index:15;max-width:640px;margin:0 auto;}
 .cart-summary{
   background:rgba(15,43,34,0.92); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
   border:1px solid var(--border); border-radius:18px;
