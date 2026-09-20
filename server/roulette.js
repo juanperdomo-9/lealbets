@@ -135,7 +135,23 @@ function resolveSpin(betType, betValue, stake) {
   return { winningNumber, color: colorOf(winningNumber), won, payout };
 }
 
+// como en una mesa de verdad: se puede tener varias fichas puestas a la vez
+// (un pleno, un color, una docena, todo junto) y un solo giro las resuelve
+// todas contra el mismo número ganador.
+function resolveMultiSpin(bets) {
+  const winningNumber = spinWheel();
+  const color = colorOf(winningNumber);
+  const results = bets.map((b) => {
+    const won = isWinningBet(b.type, b.value, winningNumber);
+    const mult = won ? payoutMultiplier(b.type) : 0;
+    const payout = Math.round(b.amount * mult * 100) / 100;
+    return { type: b.type, value: b.value, amount: b.amount, won, payout };
+  });
+  const totalPayout = Math.round(results.reduce((s, r) => s + r.payout, 0) * 100) / 100;
+  return { winningNumber, color, results, totalPayout };
+}
+
 module.exports = {
-  WHEEL_ORDER, RED_NUMBERS, colorOf, BET_TYPES, isWinningBet, payoutMultiplier, validateBet, spinWheel, resolveSpin,
+  WHEEL_ORDER, RED_NUMBERS, colorOf, BET_TYPES, isWinningBet, payoutMultiplier, validateBet, spinWheel, resolveSpin, resolveMultiSpin,
   feltNumber, feltPositionOf, areSplitNeighbors, isValidCorner,
 };

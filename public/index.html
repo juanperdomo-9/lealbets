@@ -169,17 +169,23 @@
       <div id="casino-roulette" class="casino-game">
         <div class="card">
           <h3>Ruleta europea</h3>
-          <label>Tocá el paño para elegir qué apostar</label>
+          <label>Valor de la ficha</label>
+          <div class="rl-chipvalue-row" id="rlChipValueRow"></div>
+          <div class="rl-felt-toolbar">
+            <label class="rl-hotspot-toggle"><input type="checkbox" id="rlHotspotToggle" onchange="rlToggleHotspots()"> Mostrar caballo y cuadro</label>
+            <button type="button" class="reopen-btn rl-clear-btn" onclick="rlClearBets()">Borrar apuestas</button>
+          </div>
+          <label>Tocá el paño para poner (o sacar) una ficha — podés poner varias a la vez</label>
           <div id="rlFeltBox"></div>
           <p class="rl-bet-summary" id="rlBetSummary"></p>
-          <label>Fichas a apostar</label>
-          <input id="rlStakeInput" type="number" min="1" placeholder="Ej: 500">
           <button id="rlSpinBtn" onclick="rlSpin()">Girar</button>
         </div>
         <div id="rouletteField" class="rl-field"></div>
         <div class="card sl-help">
           <h3>Pagos</h3>
           <div class="bj-pay-row"><b>Número exacto (pleno)</b><span>x36 (35 a 1)</span></div>
+          <div class="bj-pay-row"><b>Caballo (2 números)</b><span>x18 (17 a 1)</span></div>
+          <div class="bj-pay-row"><b>Cuadro (4 números)</b><span>x9 (8 a 1)</span></div>
           <div class="bj-pay-row"><b>Rojo/Negro · Par/Impar · 1-18/19-36</b><span>x2 (1 a 1)</span></div>
           <div class="bj-pay-row"><b>Docena · Columna (2 a 1)</b><span>x3 (2 a 1)</span></div>
         </div>

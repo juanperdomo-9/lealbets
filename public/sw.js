@@ -9,7 +9,7 @@
 // actualizar recién en la visita SIGUIENTE) — al cambiar el nombre acá, en
 // cambio, se vacía el caché viejo entero y esa misma visita ya trae todo
 // fresco de la red.
-const CACHE_NAME = 'leal-bets-v5';
+const CACHE_NAME = 'leal-bets-v6';
 const CORE_ASSETS = [
   '/',
   '/index.html',

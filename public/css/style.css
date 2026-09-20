@@ -960,13 +960,18 @@ section.active{display:block;animation:fadeIn .25s ease;}
 
 /* fichas redondas con degradé + sombra (mismo lenguaje visual que los
    símbolos de la tragamonedas): se usan para el historial de números
-   recientes, chiquitas y solo decorativas (no son botones). */
+   recientes (decorativas) y para elegir el valor de la ficha (botones). */
 .rl-chip{
   border-radius:50%; display:flex; align-items:center; justify-content:center;
   font-family:var(--font-display); font-weight:700; color:#fff; border:2px solid rgba(0,0,0,.4);
   box-shadow:0 3px 7px rgba(0,0,0,.5), inset 0 2px 3px rgba(255,255,255,.18), inset 0 -4px 7px rgba(0,0,0,.35);
 }
 .rl-chip-sm{width:30px; height:30px; font-size:11px;}
+/* ".card button" (clase+elemento, más específico) le gana a ".rl-chip" sola
+   en borde/padding — mismo patrón de bug ya visto varias veces con otros
+   botones dentro de una .card. */
+.card .rl-chip{padding:0; border:2px solid rgba(0,0,0,.4); box-shadow:0 3px 7px rgba(0,0,0,.5), inset 0 2px 3px rgba(255,255,255,.18), inset 0 -4px 7px rgba(0,0,0,.35);}
+.card button.rl-chip:disabled{opacity:.5; cursor:default;}
 .rl-chip.rl-red{background:radial-gradient(circle at 34% 28%, #ff8a8a, var(--red) 60%, #8f1f1f 100%);}
 .rl-chip.rl-black{background:radial-gradient(circle at 34% 28%, #4a4a4a, #161616 65%, #000 100%);}
 .rl-chip.rl-green{background:radial-gradient(circle at 34% 28%, #8CFFC2, var(--green-win) 60%, #1a8f57 100%); color:var(--ink);}
@@ -1017,13 +1022,34 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .card .rl-hotspot.active{background:var(--gold); border-color:#fff; box-shadow:0 0 6px rgba(240,194,90,.8);}
 .card button.rl-hotspot:disabled{opacity:.5; cursor:default;}
 .rl-bet-chip{
-  position:absolute; top:50%; left:50%; width:60%; height:60%; max-width:15px; max-height:15px;
+  position:absolute; top:50%; left:50%; width:65%; height:65%; max-width:17px; max-height:17px;
   transform:translate(-50%,-50%); border-radius:50%;
   background:radial-gradient(circle at 35% 28%, #fff6dc, var(--gold) 55%, var(--gold-2) 100%);
   border:1.5px solid rgba(0,0,0,.55); box-shadow:0 1px 3px rgba(0,0,0,.65);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-display); font-weight:700; font-size:5.5px; color:var(--ink); line-height:1;
 }
-.rl-bet-summary{text-align:center; font-size:12px; color:var(--chalk-dim); margin:0 0 14px;}
+.rl-bet-summary{text-align:center; font-size:11.5px; color:var(--chalk-dim); margin:0 0 14px; line-height:1.5;}
 .rl-bet-summary b{color:var(--gold); font-family:var(--font-display);}
+
+/* selector de valor de ficha + barra de herramientas del paño */
+.rl-chipvalue-row{display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:14px;}
+.card .rl-chip.rl-chipvalue{
+  width:38px; height:38px; font-size:10.5px;
+  background:radial-gradient(circle at 34% 28%, var(--surface-hover), var(--surface-2) 60%, var(--ink) 100%); color:var(--chalk);
+}
+.card .rl-chip.rl-chipvalue.active{
+  background:radial-gradient(circle at 34% 28%, #fff6dc, var(--gold) 55%, var(--gold-2) 100%); color:var(--ink);
+  box-shadow:0 0 0 3px var(--gold-soft), 0 3px 10px rgba(0,0,0,.6);
+}
+.rl-felt-toolbar{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;}
+.rl-hotspot-toggle{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--chalk-dim); cursor:pointer;}
+.rl-hotspot-toggle input{margin:0; accent-color:var(--gold); width:15px; height:15px;}
+.card .rl-clear-btn{
+  margin:0; width:auto; padding:7px 13px; font-size:11px;
+  background:none; color:var(--chalk-dim); border:1px solid var(--border); box-shadow:none;
+}
+.card .rl-clear-btn:disabled{opacity:.5; cursor:default;}
 
 /* ---------------------------------- admin ---------------------------------- */
 .card{

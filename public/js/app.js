@@ -2736,8 +2736,11 @@ const RL_SECTOR_ANGLE = 360 / 37;
 function rlColorOf(n) { if (n === 0) return 'green'; return RL_RED_NUMBERS.has(n) ? 'red' : 'black'; }
 function rlColorLabel(c) { return c === 'red' ? 'rojo' : c === 'black' ? 'negro' : 'verde'; }
 
+const RL_CHIP_VALUES = [10, 50, 100, 500, 1000];
 let RL = {
-  betType: 'number', betValue: 0,
+  bets: [], // {type, value, amount}[] — como fichas de verdad puestas en el paño, se puede tener varias a la vez
+  chipValue: 100,
+  showHotspots: false, // caballo/cuadro arrancan escondidos: menos cuadraditos, menos lío
   spinning: false, ballAngle: 0, history: [], lastResultText: '', lastWon: false,
 };
 
@@ -2807,12 +2810,53 @@ function rlValuesEqual(a, b) {
   }
   return a === b;
 }
-function rlIsActive(type, value) { return RL.betType === type && rlValuesEqual(RL.betValue, value); }
-function rlChipMark(type, value) { return rlIsActive(type, value) ? '<span class="rl-bet-chip"></span>' : ''; }
+// se puede tener varias fichas puestas a la vez (una en un número, otra en
+// rojo, otra en una docena...), así que en vez de "la apuesta actual" ahora
+// es una lista — cada casillero del paño se fija si tiene una ficha propia.
+function rlFindBet(type, value) { return RL.bets.find((b) => b.type === type && rlValuesEqual(b.value, value)); }
+function rlHasBet(type, value) { return !!rlFindBet(type, value); }
+function rlCompactAmount(n) { return n >= 1000 ? (n % 1000 === 0 ? n / 1000 : (n / 1000).toFixed(1)) + 'K' : String(n); }
+function rlChipMark(type, value) {
+  const bet = rlFindBet(type, value);
+  return bet ? `<span class="rl-bet-chip">${rlCompactAmount(bet.amount)}</span>` : '';
+}
+// tocar un casillero pone una ficha del valor elegido; volver a tocarlo la
+// saca (así se puede armar varias apuestas a la vez, como en una mesa real).
+function rlToggleBet(type, value) {
+  if (RL.spinning) return;
+  const idx = RL.bets.findIndex((b) => b.type === type && rlValuesEqual(b.value, value));
+  if (idx >= 0) RL.bets.splice(idx, 1);
+  else RL.bets.push({ type, value, amount: RL.chipValue });
+  renderRoulette();
+}
+function rlSetChipValue(v) {
+  RL.chipValue = v;
+  renderRoulette();
+}
+function rlClearBets() {
+  if (RL.spinning || !RL.bets.length) return;
+  RL.bets = [];
+  renderRoulette();
+}
+function rlToggleHotspots() {
+  RL.showHotspots = !RL.showHotspots;
+  renderRoulette();
+}
+function rlTotalStake() { return RL.bets.reduce((s, b) => s + b.amount, 0); }
+function rlBetLabel(type, value) {
+  if (type === 'number') return `pleno ${value}`;
+  if (type === 'split') return `caballo ${value[0]}-${value[1]}`;
+  if (type === 'corner') return `cuadro ${value.join('-')}`;
+  const labels = {
+    red: 'rojo', black: 'negro', even: 'par', odd: 'impar', low: '1-18', high: '19-36',
+    dozen: `${value}ª docena`, column: `columna ${value}`,
+  };
+  return labels[type] || type;
+}
 
 function rlFeltHtml() {
   const cell = (extraCls, gridCol, gridRow, type, value, label) => {
-    return `<button type="button" class="rl-felt-cell ${extraCls}${rlIsActive(type, value) ? ' active' : ''}" style="grid-column:${gridCol};grid-row:${gridRow};" onclick="rlSelectChoice('${type}', ${rlOnclickVal(value)})">${label}${rlChipMark(type, value)}</button>`;
+    return `<button type="button" class="rl-felt-cell ${extraCls}${rlHasBet(type, value) ? ' active' : ''}" style="grid-column:${gridCol};grid-row:${gridRow};" onclick="rlToggleBet('${type}', ${rlOnclickVal(value)})">${label}${rlChipMark(type, value)}</button>`;
   };
 
   let html = cell('rl-felt-zero', 1, '1/4', 'number', 0, '0');
@@ -2821,12 +2865,12 @@ function rlFeltHtml() {
     for (let r = 1; r <= 3; r++) {
       const num = rlFeltNumber(c, r);
       const colorCls = `rl-felt-${rlColorOf(num)}`;
-      numbersHtml += `<button type="button" class="rl-felt-cell ${colorCls}${rlIsActive('number', num) ? ' active' : ''}" style="grid-column:${c};grid-row:${r};" onclick="rlSelectChoice('number', ${num})">${num}${rlChipMark('number', num)}</button>`;
+      numbersHtml += `<button type="button" class="rl-felt-cell ${colorCls}${rlHasBet('number', num) ? ' active' : ''}" style="grid-column:${c};grid-row:${r};" onclick="rlToggleBet('number', ${num})">${num}${rlChipMark('number', num)}</button>`;
     }
   }
   html += `<div class="rl-numbers-wrap" style="grid-column:2/14;grid-row:1/4;">
     <div class="rl-numbers-grid">${numbersHtml}</div>
-    <div class="rl-hotspots">${rlHotspotsHtml()}</div>
+    ${RL.showHotspots ? `<div class="rl-hotspots">${rlHotspotsHtml()}</div>` : ''}
   </div>`;
   // "2 a 1" (apuesta a columna), una por fila, a la derecha del todo
   for (let r = 1; r <= 3; r++) {
@@ -2849,11 +2893,12 @@ function rlFeltHtml() {
 // caballo (entre 2 números vecinos) y cuadro (entre 4): puntitos tocables
 // sobre las líneas/esquinas de la cuadrícula de números, calculados como
 // porcentaje de esa cuadrícula (12 columnas x 3 filas parejas) — mismas
-// reglas de vecindad que valida el servidor (server/roulette.js).
+// reglas de vecindad que valida el servidor (server/roulette.js). Escondidos
+// por defecto (RL.showHotspots) para no llenar el paño de puntitos.
 function rlHotspotsHtml() {
   const dot = (leftPct, topPct, type, value, title) => {
-    const active = rlIsActive(type, value) ? ' active' : '';
-    return `<button type="button" class="rl-hotspot${active}" style="left:${leftPct}%;top:${topPct}%;" title="${title}" onclick="rlSelectChoice('${type}', ${rlOnclickVal(value)})"></button>`;
+    const active = rlHasBet(type, value) ? ' active' : '';
+    return `<button type="button" class="rl-hotspot${active}" style="left:${leftPct}%;top:${topPct}%;" title="${title}" onclick="rlToggleBet('${type}', ${rlOnclickVal(value)})"></button>`;
   };
   let html = '';
   // caballo horizontal: entre columnas vecinas, misma fila
@@ -2884,31 +2929,19 @@ function rlHotspotsHtml() {
   }
   return html;
 }
-function rlBetSummaryText() {
-  const t = RL.betType, v = RL.betValue;
-  if (t === 'number') return `Apostando al <b>${v}</b> (${rlColorLabel(rlColorOf(v))}) · paga x36`;
-  if (t === 'split') return `Apostando al <b>caballo ${v[0]}-${v[1]}</b> · paga x18`;
-  if (t === 'corner') return `Apostando al <b>cuadro ${v.join('-')}</b> · paga x9`;
-  const labels = {
-    red: ['Rojo', 2], black: ['Negro', 2], even: ['Par', 2], odd: ['Impar', 2],
-    low: ['1 a 18', 2], high: ['19 a 36', 2],
-    dozen: [`${v}ª docena`, 3], column: [`Columna ${v}`, 3],
-  };
-  const [label, mult] = labels[t] || ['—', 0];
-  return `Apostando a <b>${label}</b> · paga x${mult}`;
+function rlChipValueRowHtml() {
+  return RL_CHIP_VALUES.map((v) => `<button type="button" class="rl-chip rl-chipvalue${v === RL.chipValue ? ' active' : ''}" onclick="rlSetChipValue(${v})">${v}</button>`).join('');
 }
-function rlSelectChoice(type, value) {
-  if (RL.spinning) return;
-  RL.betType = type;
-  RL.betValue = value;
-  renderRoulette();
+function rlBetSummaryText() {
+  if (!RL.bets.length) return 'Todavía no pusiste ninguna ficha en el paño.';
+  const items = RL.bets.map((b) => `${rlBetLabel(b.type, b.value)} (${b.amount})`).join(' · ');
+  return `<b>${RL.bets.length}</b> ficha${RL.bets.length > 1 ? 's' : ''} puesta${RL.bets.length > 1 ? 's' : ''}: ${items} — total <b>${rlTotalStake()}</b>`;
 }
 
 async function rlSpin() {
   if (!ME) { toast('Entrá con tu usuario para jugar'); return; }
   if (RL.spinning) return;
-  const stake = parseInt(document.getElementById('rlStakeInput').value, 10);
-  if (!stake || stake <= 0) { toast('Poné un monto válido'); return; }
+  if (!RL.bets.length) { toast('Poné al menos una ficha en el paño'); return; }
 
   RL.spinning = true;
   RL.lastResultText = '';
@@ -2916,7 +2949,7 @@ async function rlSpin() {
 
   let result;
   try {
-    result = await apiFetch('/roulette/spin', { method: 'POST', body: { stake, betType: RL.betType, betValue: RL.betValue } });
+    result = await apiFetch('/roulette/spin', { method: 'POST', body: { bets: RL.bets } });
   } catch (e) {
     RL.spinning = false;
     renderRoulette();
@@ -2945,10 +2978,13 @@ async function rlSpin() {
 
   RL.ballAngle = targetAngle;
   RL.spinning = false;
-  RL.lastWon = result.won;
-  RL.lastResultText = result.won
-    ? `¡Ganaste ${result.payout} fichas! Salió el ${result.winningNumber} (${rlColorLabel(result.color)})`
-    : `Salió el ${result.winningNumber} (${rlColorLabel(result.color)}) — no acertaste`;
+  RL.lastWon = result.totalPayout > 0;
+  const winners = result.results.filter((r) => r.won);
+  let text = `Salió el ${result.winningNumber} (${rlColorLabel(result.color)})`;
+  text += result.totalPayout > 0
+    ? ` — ¡Ganaste ${result.totalPayout} fichas! (${winners.length} de ${result.results.length} apuestas: ${winners.map((w) => rlBetLabel(w.type, w.value)).join(', ')})`
+    : ` — ninguna de tus ${result.results.length} apuestas acertó`;
+  RL.lastResultText = text;
   RL.history.unshift({ number: result.winningNumber, color: result.color });
   if (RL.history.length > 12) RL.history.length = 12;
   applyBalanceUpdate(result.balance);
@@ -2958,25 +2994,29 @@ async function rlSpin() {
 function renderRoulette() {
   const field = document.getElementById('rouletteField');
   const spinBtn = document.getElementById('rlSpinBtn');
-  const stakeInput = document.getElementById('rlStakeInput');
   const feltBox = document.getElementById('rlFeltBox');
   const summaryEl = document.getElementById('rlBetSummary');
-  if (!field || !spinBtn || !stakeInput || !feltBox || !summaryEl) return;
+  const chipRow = document.getElementById('rlChipValueRow');
+  const hotspotToggle = document.getElementById('rlHotspotToggle');
+  const clearBtn = document.querySelector('.rl-clear-btn');
+  if (!field || !spinBtn || !feltBox || !summaryEl || !chipRow || !hotspotToggle) return;
 
+  chipRow.innerHTML = rlChipValueRowHtml();
+  hotspotToggle.checked = RL.showHotspots;
   feltBox.innerHTML = rlFeltHtml();
   summaryEl.innerHTML = rlBetSummaryText();
 
   if (!ME) {
     field.innerHTML = `<div class="empty">${icon('lock', 26)}Entrá con tu usuario para jugar.</div>`;
-    spinBtn.disabled = true; stakeInput.disabled = true;
-    document.querySelectorAll('#rlFeltBox button').forEach((b) => { b.disabled = true; });
+    spinBtn.disabled = true;
+    document.querySelectorAll('#rlFeltBox button, #rlChipValueRow button').forEach((b) => { b.disabled = true; });
     return;
   }
 
-  spinBtn.disabled = RL.spinning;
-  stakeInput.disabled = RL.spinning;
+  spinBtn.disabled = RL.spinning || !RL.bets.length;
   spinBtn.textContent = RL.spinning ? 'Girando…' : 'Girar';
-  document.querySelectorAll('#rlFeltBox button').forEach((b) => { b.disabled = RL.spinning; });
+  if (clearBtn) clearBtn.disabled = RL.spinning || !RL.bets.length;
+  document.querySelectorAll('#rlFeltBox button, #rlChipValueRow button').forEach((b) => { b.disabled = RL.spinning; });
 
   field.innerHTML = `
     <div class="rl-wheel-wrap">
