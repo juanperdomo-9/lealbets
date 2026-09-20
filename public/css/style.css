@@ -922,6 +922,109 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .sl-help-note{font-size:12px;color:var(--chalk-dim);margin-top:10px;}
 .sl-help-note b{color:var(--gold);}
 
+/* ---------------------------------- casino: ruleta ---------------------------------- */
+.rl-field{
+  background:radial-gradient(ellipse at top, var(--surface-2), var(--bg) 75%);
+  border:1px solid var(--border-soft); border-radius:var(--radius-lg);
+  padding:18px 14px; margin-bottom:14px; display:flex; flex-direction:column; align-items:center;
+}
+.rl-wheel-wrap{position:relative; width:100%; max-width:300px; aspect-ratio:1; margin:0 auto;}
+.rl-wheel-svg{width:100%; height:100%; display:block; filter:drop-shadow(0 10px 20px rgba(0,0,0,.5));}
+.rl-wedge-red{fill:var(--red);}
+.rl-wedge-black{fill:#1a1a1a;}
+.rl-wedge-green{fill:var(--green-win);}
+.rl-wedge-red, .rl-wedge-black, .rl-wedge-green{stroke:rgba(0,0,0,.5); stroke-width:0.4;}
+.rl-wedge-num{
+  font-family:var(--font-display); font-weight:700; font-size:6.2px; fill:#fff;
+  text-anchor:middle; dominant-baseline:middle; paint-order:stroke; stroke:rgba(0,0,0,.6); stroke-width:0.5px;
+}
+.rl-wheel-rim{fill:none; stroke:var(--gold-2); stroke-width:2.5;}
+.rl-hub-ring{fill:var(--ink); stroke:var(--gold); stroke-width:1;}
+.rl-hub{filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));}
+/* la bola gira dentro de un contenedor propio del mismo tamaño que la rueda:
+   rotarlo la lleva alrededor sin tener que animar su posición a mano. */
+.rl-ball-orbit{position:absolute; inset:0; transform-origin:50% 50%;}
+.rl-ball{
+  position:absolute; top:6.5%; left:50%; width:5%; height:5%; margin-left:-2.5%;
+  border-radius:50%; background:radial-gradient(circle at 35% 30%, #fff, #cfcfcf 75%);
+  box-shadow:0 1px 3px rgba(0,0,0,.6), 0 0 4px rgba(255,255,255,.5);
+}
+.rl-pointer{
+  position:absolute; top:-3%; left:50%; transform:translateX(-50%); z-index:2;
+  width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent;
+  border-top:11px solid var(--gold); filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));
+}
+.rl-history{display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-top:16px;}
+.rl-result{text-align:center; font-family:var(--font-display); color:var(--chalk-dim); margin-top:12px; font-size:13.5px; font-weight:700;}
+.rl-result.rl-win{color:var(--gold);}
+
+/* fichas redondas con degradé + sombra (mismo lenguaje visual que los
+   símbolos de la tragamonedas): se usan para el historial de números
+   recientes, chiquitas y solo decorativas (no son botones). */
+.rl-chip{
+  border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-display); font-weight:700; color:#fff; border:2px solid rgba(0,0,0,.4);
+  box-shadow:0 3px 7px rgba(0,0,0,.5), inset 0 2px 3px rgba(255,255,255,.18), inset 0 -4px 7px rgba(0,0,0,.35);
+}
+.rl-chip-sm{width:30px; height:30px; font-size:11px;}
+.rl-chip.rl-red{background:radial-gradient(circle at 34% 28%, #ff8a8a, var(--red) 60%, #8f1f1f 100%);}
+.rl-chip.rl-black{background:radial-gradient(circle at 34% 28%, #4a4a4a, #161616 65%, #000 100%);}
+.rl-chip.rl-green{background:radial-gradient(circle at 34% 28%, #8CFFC2, var(--green-win) 60%, #1a8f57 100%); color:var(--ink);}
+
+/* paño de apuestas: la disposición real de una mesa de ruleta (0 aparte +
+   3 filas x 12 columnas + columnas "2 a 1" + docenas + apuestas simples de
+   afuera), armado como grid para no tener que escribir cada casillero a
+   mano — las posiciones las calcula JS (rlFeltHtml) y las manda por
+   grid-column/grid-row inline. */
+.rl-felt{
+  display:grid; grid-template-columns:1.15fr repeat(12, 1fr) 0.85fr;
+  grid-auto-rows:minmax(24px, auto); gap:2px;
+  background:#0c3320; border:3px solid var(--gold-2); border-radius:var(--radius-md);
+  padding:5px; margin-bottom:6px; box-shadow:inset 0 3px 12px rgba(0,0,0,.55);
+}
+/* ".card button" (clase+elemento, más específico) pisa cualquier cosa de
+   menor especificidad puesta en ".rl-felt-cell" sola — mismo patrón de bug
+   ya visto antes con otros botones dentro de una .card, así que todo lo que
+   .card button también toca (fondo, borde, padding) se repite acá con el
+   prefijo ".card" para ganarle. */
+.card .rl-felt-cell{
+  border:1px solid rgba(255,255,255,.16); background:#12261c; color:#fff;
+  font-family:var(--font-display); font-weight:700; font-size:9px; letter-spacing:.1px;
+  display:flex; align-items:center; justify-content:center; position:relative;
+  cursor:pointer; border-radius:3px; padding:1px; min-height:24px; line-height:1.05;
+  box-shadow:none; transition:filter .12s ease;
+}
+.card .rl-felt-cell:active{filter:brightness(1.25);}
+.card .rl-felt-zero{background:var(--green-win); color:var(--ink); font-size:12px;}
+.card .rl-felt-red{background:linear-gradient(160deg, #d94040, #8f1f1f);}
+.card .rl-felt-black{background:linear-gradient(160deg, #2b2b2b, #0c0c0c);}
+.card .rl-felt-outside{background:#0f2b22; font-size:7.6px;}
+.card .rl-felt-cell.active{outline:2px solid var(--gold); outline-offset:-2px; z-index:1;}
+.card button.rl-felt-cell:disabled{opacity:.6; cursor:default;}
+/* la cuadrícula de números va adentro de un contenedor propio (parejo, 12x3)
+   para poder calcular los puntitos de caballo/cuadro como % simple de su
+   tamaño — separado de la fila del "0" y de las columnas "2 a 1", que no
+   tienen el mismo ancho. */
+.rl-numbers-wrap{position:relative;}
+.rl-numbers-grid{display:grid; grid-template-columns:repeat(12, 1fr); grid-template-rows:repeat(3, 1fr); gap:2px; height:100%;}
+.rl-hotspots{position:absolute; inset:0; pointer-events:none;}
+.card .rl-hotspot{
+  position:absolute; width:13px; height:13px; margin:-6.5px 0 0 -6.5px; padding:0;
+  border-radius:50%; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.35);
+  pointer-events:auto; cursor:pointer; z-index:2; box-shadow:none;
+}
+.card .rl-hotspot:active{background:rgba(240,194,90,.6);}
+.card .rl-hotspot.active{background:var(--gold); border-color:#fff; box-shadow:0 0 6px rgba(240,194,90,.8);}
+.card button.rl-hotspot:disabled{opacity:.5; cursor:default;}
+.rl-bet-chip{
+  position:absolute; top:50%; left:50%; width:60%; height:60%; max-width:15px; max-height:15px;
+  transform:translate(-50%,-50%); border-radius:50%;
+  background:radial-gradient(circle at 35% 28%, #fff6dc, var(--gold) 55%, var(--gold-2) 100%);
+  border:1.5px solid rgba(0,0,0,.55); box-shadow:0 1px 3px rgba(0,0,0,.65);
+}
+.rl-bet-summary{text-align:center; font-size:12px; color:var(--chalk-dim); margin:0 0 14px;}
+.rl-bet-summary b{color:var(--gold); font-family:var(--font-display);}
+
 /* ---------------------------------- admin ---------------------------------- */
 .card{
   border:1px solid var(--border-soft);background:var(--surface);

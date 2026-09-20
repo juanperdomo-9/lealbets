@@ -82,6 +82,7 @@
         <button data-view="penalty" onclick="setCasinoView('penalty')">Penales</button>
         <button data-view="mines" onclick="setCasinoView('mines')">Minas</button>
         <button data-view="slots" onclick="setCasinoView('slots')">Tragamonedas</button>
+        <button data-view="roulette" onclick="setCasinoView('roulette')">Ruleta</button>
       </div>
 
       <div id="casino-blackjack" class="casino-game active">
@@ -162,6 +163,25 @@
           <h3>Pagos (x apuesta por línea, 10 líneas fijas)</h3>
           <div id="slPaytable"></div>
           <p class="sl-help-note">3 símbolos <b>Arco</b> en cualquier lado reparten giros gratis, con un multiplicador que se va juntando en cada giro. También podés comprar la ronda bonus directo por 100x lo que apuestes.</p>
+        </div>
+      </div>
+
+      <div id="casino-roulette" class="casino-game">
+        <div class="card">
+          <h3>Ruleta europea</h3>
+          <label>Tocá el paño para elegir qué apostar</label>
+          <div id="rlFeltBox"></div>
+          <p class="rl-bet-summary" id="rlBetSummary"></p>
+          <label>Fichas a apostar</label>
+          <input id="rlStakeInput" type="number" min="1" placeholder="Ej: 500">
+          <button id="rlSpinBtn" onclick="rlSpin()">Girar</button>
+        </div>
+        <div id="rouletteField" class="rl-field"></div>
+        <div class="card sl-help">
+          <h3>Pagos</h3>
+          <div class="bj-pay-row"><b>Número exacto (pleno)</b><span>x36 (35 a 1)</span></div>
+          <div class="bj-pay-row"><b>Rojo/Negro · Par/Impar · 1-18/19-36</b><span>x2 (1 a 1)</span></div>
+          <div class="bj-pay-row"><b>Docena · Columna (2 a 1)</b><span>x3 (2 a 1)</span></div>
         </div>
       </div>
     </section>

@@ -2144,6 +2144,7 @@ function setCasinoView(view) {
   else if (view === 'penalty') pnLoadState();
   else if (view === 'mines') mnLoadState();
   else if (view === 'slots') slLoadState();
+  else if (view === 'roulette') renderRoulette();
 }
 
 // ---------- penales (tanda de penaltis) ----------
@@ -2721,6 +2722,273 @@ function renderSlots() {
     + (SL.lastResultText ? `<div class="sl-result">${SL.lastResultText}</div>` : '');
 }
 
+// ---------- ruleta ----------
+// ruleta europea (un solo cero) — el servidor sortea siempre el número, acá
+// solo se arma la rueda, se elige qué apostar y se anima la bola. Mismo
+// orden físico de casilleros que server/roulette.js (WHEEL_ORDER), para que
+// la bola frene visualmente en el número correcto.
+const RL_WHEEL_ORDER = [
+  0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5,
+  24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26,
+];
+const RL_RED_NUMBERS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+const RL_SECTOR_ANGLE = 360 / 37;
+function rlColorOf(n) { if (n === 0) return 'green'; return RL_RED_NUMBERS.has(n) ? 'red' : 'black'; }
+function rlColorLabel(c) { return c === 'red' ? 'rojo' : c === 'black' ? 'negro' : 'verde'; }
+
+let RL = {
+  betType: 'number', betValue: 0,
+  spinning: false, ballAngle: 0, history: [], lastResultText: '', lastWon: false,
+};
+
+function rlPolar(cx, cy, r, angleDeg) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return { x: cx + r * Math.sin(rad), y: cy - r * Math.cos(rad) };
+}
+// rueda dibujada una sola vez con SVG: 37 casilleros en forma de anillo (no
+// un círculo entero), con los números rotados para que se lean "de adentro
+// hacia afuera" como en una ruleta de verdad.
+function rlWheelSvg() {
+  const cx = 100, cy = 100, rOuter = 92, rInner = 56, rText = 76;
+  let wedges = '';
+  let labels = '';
+  RL_WHEEL_ORDER.forEach((num, i) => {
+    const center = i * RL_SECTOR_ANGLE;
+    const a0 = center - RL_SECTOR_ANGLE / 2;
+    const a1 = center + RL_SECTOR_ANGLE / 2;
+    const p0o = rlPolar(cx, cy, rOuter, a0);
+    const p1o = rlPolar(cx, cy, rOuter, a1);
+    const p0i = rlPolar(cx, cy, rInner, a0);
+    const p1i = rlPolar(cx, cy, rInner, a1);
+    const color = rlColorOf(num);
+    const cls = color === 'red' ? 'rl-wedge-red' : color === 'black' ? 'rl-wedge-black' : 'rl-wedge-green';
+    wedges += `<path d="M ${p0i.x.toFixed(2)} ${p0i.y.toFixed(2)} L ${p0o.x.toFixed(2)} ${p0o.y.toFixed(2)} A ${rOuter} ${rOuter} 0 0 1 ${p1o.x.toFixed(2)} ${p1o.y.toFixed(2)} L ${p1i.x.toFixed(2)} ${p1i.y.toFixed(2)} A ${rInner} ${rInner} 0 0 0 ${p0i.x.toFixed(2)} ${p0i.y.toFixed(2)} Z" class="${cls}"></path>`;
+    const tp = rlPolar(cx, cy, rText, center);
+    labels += `<text x="${tp.x.toFixed(2)}" y="${tp.y.toFixed(2)}" transform="rotate(${center.toFixed(2)} ${tp.x.toFixed(2)} ${tp.y.toFixed(2)})" class="rl-wedge-num">${num}</text>`;
+  });
+  return `<svg viewBox="0 0 200 200" class="rl-wheel-svg">
+    <defs>
+      <radialGradient id="rlHubGrad" cx="35%" cy="30%" r="75%">
+        <stop offset="0%" stop-color="#fbe7b8"></stop>
+        <stop offset="45%" stop-color="#F0C25A"></stop>
+        <stop offset="100%" stop-color="#C8912E"></stop>
+      </radialGradient>
+    </defs>
+    <circle cx="100" cy="100" r="97" class="rl-wheel-rim"></circle>
+    ${wedges}
+    <circle cx="100" cy="100" r="${rInner - 2}" class="rl-hub-ring"></circle>
+    ${labels}
+    <circle cx="100" cy="100" r="${rInner - 10}" fill="url(#rlHubGrad)" class="rl-hub"></circle>
+  </svg>`;
+}
+
+function rlHistoryHtml() {
+  if (!RL.history.length) return '';
+  return `<div class="rl-history">${RL.history.map((h) => `<span class="rl-chip rl-chip-sm rl-${h.color}">${h.number}</span>`).join('')}</div>`;
+}
+
+// paño real de la ruleta: los números van en 3 filas x 12 columnas (más el 0
+// aparte) en el mismo orden que cualquier mesa de ruleta de verdad — no es
+// el orden de la rueda (RL_WHEEL_ORDER), es el orden del paño para apostar.
+// Fila de arriba: múltiplos de 3 (3,6,9...36); del medio: ...2 mod 3; abajo:
+// ...1 mod 3 — así cada columna del paño coincide con una apuesta a columna.
+function rlFeltNumber(col, row) { return row === 1 ? col * 3 : row === 2 ? col * 3 - 1 : col * 3 - 2; }
+// serializa un valor de apuesta (número, null o arreglo) para meterlo en un
+// atributo onclick="..." tal cual es válido en JS.
+function rlOnclickVal(v) {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return `[${v.join(',')}]`;
+  return v;
+}
+function rlValuesEqual(a, b) {
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((v, i) => v === b[i]);
+  }
+  return a === b;
+}
+function rlIsActive(type, value) { return RL.betType === type && rlValuesEqual(RL.betValue, value); }
+function rlChipMark(type, value) { return rlIsActive(type, value) ? '<span class="rl-bet-chip"></span>' : ''; }
+
+function rlFeltHtml() {
+  const cell = (extraCls, gridCol, gridRow, type, value, label) => {
+    return `<button type="button" class="rl-felt-cell ${extraCls}${rlIsActive(type, value) ? ' active' : ''}" style="grid-column:${gridCol};grid-row:${gridRow};" onclick="rlSelectChoice('${type}', ${rlOnclickVal(value)})">${label}${rlChipMark(type, value)}</button>`;
+  };
+
+  let html = cell('rl-felt-zero', 1, '1/4', 'number', 0, '0');
+  let numbersHtml = '';
+  for (let c = 1; c <= 12; c++) {
+    for (let r = 1; r <= 3; r++) {
+      const num = rlFeltNumber(c, r);
+      const colorCls = `rl-felt-${rlColorOf(num)}`;
+      numbersHtml += `<button type="button" class="rl-felt-cell ${colorCls}${rlIsActive('number', num) ? ' active' : ''}" style="grid-column:${c};grid-row:${r};" onclick="rlSelectChoice('number', ${num})">${num}${rlChipMark('number', num)}</button>`;
+    }
+  }
+  html += `<div class="rl-numbers-wrap" style="grid-column:2/14;grid-row:1/4;">
+    <div class="rl-numbers-grid">${numbersHtml}</div>
+    <div class="rl-hotspots">${rlHotspotsHtml()}</div>
+  </div>`;
+  // "2 a 1" (apuesta a columna), una por fila, a la derecha del todo
+  for (let r = 1; r <= 3; r++) {
+    const colBet = r === 1 ? 3 : r === 2 ? 2 : 1;
+    html += cell('rl-felt-outside', 14, r, 'column', colBet, '2:1');
+  }
+  // docenas
+  html += cell('rl-felt-outside', '2/6', 4, 'dozen', 1, '1ª doc.');
+  html += cell('rl-felt-outside', '6/10', 4, 'dozen', 2, '2ª doc.');
+  html += cell('rl-felt-outside', '10/14', 4, 'dozen', 3, '3ª doc.');
+  // apuestas simples de afuera
+  html += cell('rl-felt-outside', '2/4', 5, 'low', null, '1-18');
+  html += cell('rl-felt-outside', '4/6', 5, 'even', null, 'Par');
+  html += cell('rl-felt-red', '6/8', 5, 'red', null, 'Rojo');
+  html += cell('rl-felt-black', '8/10', 5, 'black', null, 'Negro');
+  html += cell('rl-felt-outside', '10/12', 5, 'odd', null, 'Impar');
+  html += cell('rl-felt-outside', '12/14', 5, 'high', null, '19-36');
+  return `<div class="rl-felt">${html}</div>`;
+}
+// caballo (entre 2 números vecinos) y cuadro (entre 4): puntitos tocables
+// sobre las líneas/esquinas de la cuadrícula de números, calculados como
+// porcentaje de esa cuadrícula (12 columnas x 3 filas parejas) — mismas
+// reglas de vecindad que valida el servidor (server/roulette.js).
+function rlHotspotsHtml() {
+  const dot = (leftPct, topPct, type, value, title) => {
+    const active = rlIsActive(type, value) ? ' active' : '';
+    return `<button type="button" class="rl-hotspot${active}" style="left:${leftPct}%;top:${topPct}%;" title="${title}" onclick="rlSelectChoice('${type}', ${rlOnclickVal(value)})"></button>`;
+  };
+  let html = '';
+  // caballo horizontal: entre columnas vecinas, misma fila
+  for (let r = 1; r <= 3; r++) {
+    for (let c = 1; c <= 11; c++) {
+      const a = rlFeltNumber(c, r), b = rlFeltNumber(c + 1, r);
+      html += dot((c / 12) * 100, ((r - 0.5) / 3) * 100, 'split', [a, b], `Caballo ${a}-${b}`);
+    }
+  }
+  // caballo vertical: entre filas vecinas, misma columna
+  for (let c = 1; c <= 12; c++) {
+    for (let r = 1; r <= 2; r++) {
+      const a = rlFeltNumber(c, r), b = rlFeltNumber(c, r + 1);
+      html += dot(((c - 0.5) / 12) * 100, (r / 3) * 100, 'split', [a, b], `Caballo ${a}-${b}`);
+    }
+  }
+  // caballo con el 0: en el borde izquierdo, contra la primera columna
+  for (let r = 1; r <= 3; r++) {
+    const b = rlFeltNumber(1, r);
+    html += dot(0, ((r - 0.5) / 3) * 100, 'split', [0, b], `Caballo 0-${b}`);
+  }
+  // cuadro: en cada cruce interior (esquina de 4 números)
+  for (let c = 1; c <= 11; c++) {
+    for (let r = 1; r <= 2; r++) {
+      const nums = [rlFeltNumber(c, r), rlFeltNumber(c + 1, r), rlFeltNumber(c, r + 1), rlFeltNumber(c + 1, r + 1)];
+      html += dot((c / 12) * 100, (r / 3) * 100, 'corner', nums, `Cuadro ${nums.join('-')}`);
+    }
+  }
+  return html;
+}
+function rlBetSummaryText() {
+  const t = RL.betType, v = RL.betValue;
+  if (t === 'number') return `Apostando al <b>${v}</b> (${rlColorLabel(rlColorOf(v))}) · paga x36`;
+  if (t === 'split') return `Apostando al <b>caballo ${v[0]}-${v[1]}</b> · paga x18`;
+  if (t === 'corner') return `Apostando al <b>cuadro ${v.join('-')}</b> · paga x9`;
+  const labels = {
+    red: ['Rojo', 2], black: ['Negro', 2], even: ['Par', 2], odd: ['Impar', 2],
+    low: ['1 a 18', 2], high: ['19 a 36', 2],
+    dozen: [`${v}ª docena`, 3], column: [`Columna ${v}`, 3],
+  };
+  const [label, mult] = labels[t] || ['—', 0];
+  return `Apostando a <b>${label}</b> · paga x${mult}`;
+}
+function rlSelectChoice(type, value) {
+  if (RL.spinning) return;
+  RL.betType = type;
+  RL.betValue = value;
+  renderRoulette();
+}
+
+async function rlSpin() {
+  if (!ME) { toast('Entrá con tu usuario para jugar'); return; }
+  if (RL.spinning) return;
+  const stake = parseInt(document.getElementById('rlStakeInput').value, 10);
+  if (!stake || stake <= 0) { toast('Poné un monto válido'); return; }
+
+  RL.spinning = true;
+  RL.lastResultText = '';
+  renderRoulette();
+
+  let result;
+  try {
+    result = await apiFetch('/roulette/spin', { method: 'POST', body: { stake, betType: RL.betType, betValue: RL.betValue } });
+  } catch (e) {
+    RL.spinning = false;
+    renderRoulette();
+    toast(e.message);
+    return;
+  }
+
+  // la bola sigue girando siempre para adelante (nunca "salta" para atrás):
+  // se calcula cuánto falta desde el ángulo actual para caer en el número
+  // real, y se le suman varias vueltas enteras de más para que dure un rato.
+  const winningIndex = RL_WHEEL_ORDER.indexOf(result.winningNumber);
+  const currentMod = ((RL.ballAngle % 360) + 360) % 360;
+  const desiredMod = winningIndex * RL_SECTOR_ANGLE;
+  let diff = desiredMod - currentMod;
+  if (diff < 0) diff += 360;
+  const extraTurns = 6 + Math.floor(Math.random() * 3); // 6 a 8 vueltas de más
+  const targetAngle = RL.ballAngle + diff + extraTurns * 360;
+
+  const orbit = document.getElementById('rlBallOrbit');
+  if (orbit) {
+    orbit.style.transition = 'transform 4200ms cubic-bezier(0.14,0.7,0.19,1)';
+    void orbit.offsetWidth; // fuerza el reflow para que la transición arranque desde el ángulo actual
+    orbit.style.transform = `rotate(${targetAngle}deg)`;
+  }
+  await sleep(4300);
+
+  RL.ballAngle = targetAngle;
+  RL.spinning = false;
+  RL.lastWon = result.won;
+  RL.lastResultText = result.won
+    ? `¡Ganaste ${result.payout} fichas! Salió el ${result.winningNumber} (${rlColorLabel(result.color)})`
+    : `Salió el ${result.winningNumber} (${rlColorLabel(result.color)}) — no acertaste`;
+  RL.history.unshift({ number: result.winningNumber, color: result.color });
+  if (RL.history.length > 12) RL.history.length = 12;
+  applyBalanceUpdate(result.balance);
+  renderRoulette();
+}
+
+function renderRoulette() {
+  const field = document.getElementById('rouletteField');
+  const spinBtn = document.getElementById('rlSpinBtn');
+  const stakeInput = document.getElementById('rlStakeInput');
+  const feltBox = document.getElementById('rlFeltBox');
+  const summaryEl = document.getElementById('rlBetSummary');
+  if (!field || !spinBtn || !stakeInput || !feltBox || !summaryEl) return;
+
+  feltBox.innerHTML = rlFeltHtml();
+  summaryEl.innerHTML = rlBetSummaryText();
+
+  if (!ME) {
+    field.innerHTML = `<div class="empty">${icon('lock', 26)}Entrá con tu usuario para jugar.</div>`;
+    spinBtn.disabled = true; stakeInput.disabled = true;
+    document.querySelectorAll('#rlFeltBox button').forEach((b) => { b.disabled = true; });
+    return;
+  }
+
+  spinBtn.disabled = RL.spinning;
+  stakeInput.disabled = RL.spinning;
+  spinBtn.textContent = RL.spinning ? 'Girando…' : 'Girar';
+  document.querySelectorAll('#rlFeltBox button').forEach((b) => { b.disabled = RL.spinning; });
+
+  field.innerHTML = `
+    <div class="rl-wheel-wrap">
+      ${rlWheelSvg()}
+      <div class="rl-ball-orbit" id="rlBallOrbit" style="transform:rotate(${RL.ballAngle}deg)"><div class="rl-ball"></div></div>
+      <div class="rl-pointer"></div>
+    </div>
+    ${rlHistoryHtml()}
+    ${RL.lastResultText ? `<div class="rl-result${RL.lastWon ? ' rl-win' : ''}">${RL.lastResultText}</div>` : ''}
+  `;
+}
+
 // ---------- init ----------
 (async function init() {
   await refreshFromServer(true);
@@ -2752,6 +3020,7 @@ function renderSlots() {
   renderPenalty();
   renderMines();
   renderSlots();
+  renderRoulette();
 
   const adminToken = localStorage.getItem('lb_admin_token');
   if (adminToken) {

@@ -17,6 +17,7 @@ const blackjackRoutes = require('./routes/blackjack');
 const penaltyRoutes = require('./routes/penalty');
 const minesRoutes = require('./routes/mines');
 const slotsRoutes = require('./routes/slots');
+const rouletteRoutes = require('./routes/roulette');
 const lealHistoryRoutes = require('./routes/lealHistory');
 const lealMatchesRoutes = require('./routes/lealMatches');
 
@@ -39,6 +40,7 @@ async function main() {
   app.use('/api/penalty', penaltyRoutes);
   app.use('/api/mines', minesRoutes);
   app.use('/api/slots', slotsRoutes);
+  app.use('/api/roulette', rouletteRoutes);
   app.use('/api/leal-history', lealHistoryRoutes);
   app.use('/api/leal-matches', lealMatchesRoutes);
 
