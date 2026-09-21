@@ -3041,12 +3041,26 @@ function renderRoulette() {
 // (evento "table:update") apenas cambia algo — nadie necesita refrescar la
 // página para ver la jugada de otro. LB.table es simplemente la última foto
 // que mandó el servidor.
-let LB = { table: null };
+let LB = { table: null, anim: { roundNumber: -1, counts: {} } };
 
-function lbCardHtml(card) {
-  if (!card) return `<div class="lb-card lb-card-hidden"></div>`;
+// las cartas nuevas desde el último render (dentro de la misma ronda) se
+// marcan para que la CSS las anime entrando de a una — como reemplazamos
+// todo el innerHTML en cada actualización, sin este rastreo cada broadcast
+// (aunque sea de otro asiento) volvería a animar TODAS las cartas ya
+// repartidas, no solo la nueva.
+function lbCardsWithAnim(cards, key) {
+  if (LB.anim.roundNumber !== LB.table.roundNumber) LB.anim = { roundNumber: LB.table.roundNumber, counts: {} };
+  const prevCount = LB.anim.counts[key] || 0;
+  const html = cards.map((c, i) => lbCardHtml(c, i >= prevCount ? i - prevCount : null)).join('');
+  LB.anim.counts[key] = cards.length;
+  return html;
+}
+function lbCardHtml(card, staggerIndex) {
+  const animAttr = staggerIndex != null ? ` style="animation-delay:${staggerIndex * 220}ms"` : '';
+  const animCls = staggerIndex != null ? ' lb-card-deal' : '';
+  if (!card) return `<div class="lb-card lb-card-hidden${animCls}"${animAttr}></div>`;
   const red = card.s === '♥' || card.s === '♦';
-  return `<div class="lb-card${red ? ' lb-card-red' : ''}">${card.r}${card.s}</div>`;
+  return `<div class="lb-card${red ? ' lb-card-red' : ''}${animCls}"${animAttr}>${card.r}${card.s}</div>`;
 }
 function lbMySeat(table) {
   return ME ? table.seats.find((s) => s && s.userName === ME) : null;
@@ -3056,7 +3070,9 @@ function lbPhaseLabel(table) {
   if (table.phase === 'betting') return 'Apuestas abiertas';
   if (table.phase === 'playing') {
     const seat = table.currentSeatIndex != null ? table.seats[table.currentSeatIndex] : null;
-    return seat ? `Turno de ${seat.userName}` : 'Jugando…';
+    if (!seat) return 'Jugando…';
+    const multi = seat.hands.length > 1 ? ` (mano ${(table.currentHandIndex ?? 0) + 1}/${seat.hands.length})` : '';
+    return `Turno de ${seat.userName}${multi}`;
   }
   if (table.phase === 'payout') return 'Resultados de la ronda';
   return '';
@@ -3068,17 +3084,30 @@ function lbSecondsLeft(table) {
 function lbSeatStatusHtml(seat) {
   if (seat.status === 'seated') return `<span class="lb-status">sentado</span>`;
   if (seat.status === 'betting') return `<span class="lb-status">apostó ${seat.bet}</span>`;
-  if (seat.status === 'playing') return `<span class="lb-status lb-status-live">jugando…</span>`;
-  if (seat.status === 'stood') return `<span class="lb-status">plantado</span>`;
-  if (seat.status === 'busted') return `<span class="lb-status lb-status-lose">se pasó</span>`;
-  if (seat.status === 'blackjack') return `<span class="lb-status lb-status-win">¡blackjack!</span>`;
-  if (seat.status === 'done') {
-    if (seat.result === 'win') return `<span class="lb-status lb-status-win">ganó ${seat.payout}</span>`;
-    if (seat.result === 'blackjack') return `<span class="lb-status lb-status-win">¡blackjack! ganó ${seat.payout}</span>`;
-    if (seat.result === 'push') return `<span class="lb-status">empate</span>`;
+  return '';
+}
+function lbHandStatusHtml(hand) {
+  if (hand.status === 'playing') return `<span class="lb-status lb-status-live">jugando…</span>`;
+  if (hand.status === 'stood') return `<span class="lb-status">plantada</span>`;
+  if (hand.status === 'busted') return `<span class="lb-status lb-status-lose">se pasó</span>`;
+  if (hand.status === 'blackjack') return `<span class="lb-status lb-status-win">¡blackjack!</span>`;
+  if (hand.status === 'done') {
+    if (hand.result === 'win') return `<span class="lb-status lb-status-win">ganó ${hand.payout}</span>`;
+    if (hand.result === 'blackjack') return `<span class="lb-status lb-status-win">¡blackjack! ganó ${hand.payout}</span>`;
+    if (hand.result === 'push') return `<span class="lb-status">empate</span>`;
     return `<span class="lb-status lb-status-lose">perdió</span>`;
   }
   return '';
+}
+function lbHandHtml(hand, seatIndex, handIndex, isActive) {
+  const cardsHtml = hand.cards.length ? lbCardsWithAnim(hand.cards, `s${seatIndex}h${handIndex}`) : '';
+  const total = hand.cards.length ? `<div class="lb-total">${bjHandTotal(hand.cards)}</div>` : '';
+  return `<div class="lb-hand${isActive ? ' lb-hand-active' : ''}">
+    ${hand.bet > 0 ? `<div class="lb-seat-bet">${icon('wallet', 10)}${hand.bet}</div>` : ''}
+    <div class="lb-seat-cards">${cardsHtml}</div>
+    ${total}
+    ${lbHandStatusHtml(hand)}
+  </div>`;
 }
 function lbSeatHtml(seat, index, table) {
   if (!seat) {
@@ -3089,15 +3118,15 @@ function lbSeatHtml(seat, index, table) {
   }
   const isMe = seat.userName === ME;
   const isTurn = table.phase === 'playing' && table.currentSeatIndex === index;
-  const cardsHtml = seat.cards.length ? seat.cards.map((c) => lbCardHtml(c)).join('') : '';
-  const total = seat.cards.length ? `<div class="lb-total">${bjHandTotal(seat.cards)}</div>` : '';
+  const handsHtml = seat.hands.length
+    ? `<div class="lb-hands${seat.hands.length > 1 ? ' lb-hands-split' : ''}">${seat.hands.map((h, hi) => lbHandHtml(h, index, hi, isTurn && table.currentHandIndex === hi)).join('')}</div>`
+    : '';
   return `<div class="lb-seat${isMe ? ' lb-seat-me' : ''}${isTurn ? ' lb-seat-turn' : ''}">
     <div class="lb-seat-avatar">${seat.userName.charAt(0).toUpperCase()}</div>
     <div class="lb-seat-name">${seat.userName}${isMe ? ' (vos)' : ''}</div>
-    ${seat.bet > 0 ? `<div class="lb-seat-bet">${icon('wallet', 11)}${seat.bet}</div>` : ''}
-    <div class="lb-seat-cards">${cardsHtml}</div>
-    ${total}
     ${lbSeatStatusHtml(seat)}
+    ${handsHtml}
+    ${seat.sideResultText ? `<div class="lb-side-result">${seat.sideResultText}</div>` : ''}
   </div>`;
 }
 
@@ -3114,12 +3143,15 @@ async function lbStandUp() {
 }
 async function lbPlaceBet() {
   const amount = parseInt(document.getElementById('lbBetInput').value, 10);
-  if (!amount || amount <= 0) { toast('Poné un monto válido'); return; }
-  try { await apiFetch('/live-blackjack/bet', { method: 'POST', body: { amount } }); } catch (e) { toast(e.message); }
+  if (!amount || amount <= 0) { toast('Poné un monto válido para la mano principal'); return; }
+  const pairsStake = parseInt(document.getElementById('lbPairsInput').value, 10) || 0;
+  const trioStake = parseInt(document.getElementById('lbTrioInput').value, 10) || 0;
+  try { await apiFetch('/live-blackjack/bet', { method: 'POST', body: { amount, pairsStake, trioStake } }); } catch (e) { toast(e.message); }
 }
 async function lbHit() { try { await apiFetch('/live-blackjack/hit', { method: 'POST' }); } catch (e) { toast(e.message); } }
 async function lbStand() { try { await apiFetch('/live-blackjack/stand', { method: 'POST' }); } catch (e) { toast(e.message); } }
 async function lbDouble() { try { await apiFetch('/live-blackjack/double', { method: 'POST' }); } catch (e) { toast(e.message); } }
+async function lbSplit() { try { await apiFetch('/live-blackjack/split', { method: 'POST' }); } catch (e) { toast(e.message); } }
 
 function renderLiveTable() {
   const field = document.getElementById('liveTableField');
@@ -3131,9 +3163,10 @@ function renderLiveTable() {
   const mySeat = lbMySeat(table);
   const seatedIdx = mySeat ? table.seats.findIndex((s) => s === mySeat) : -1;
   const myTurn = table.phase === 'playing' && seatedIdx !== -1 && table.currentSeatIndex === seatedIdx;
+  const myHand = myTurn ? mySeat.hands[table.currentHandIndex] : null;
   const tableFull = table.seats.every(Boolean);
   const dealing = table.phase === 'playing' || table.phase === 'payout';
-  const dealerCardsHtml = table.dealerHand.map((c) => lbCardHtml(c)).join('') + (dealing && table.dealerHidden ? lbCardHtml(null) : '');
+  const dealerCardsHtml = lbCardsWithAnim(table.dealerHand, 'd') + (dealing && table.dealerHidden ? lbCardHtml(null) : '');
   const dealerTotal = table.dealerHidden ? '' : `<div class="lb-total">${bjHandTotal(table.dealerHand)}</div>`;
 
   let controlsHtml = '';
@@ -3145,16 +3178,23 @@ function renderLiveTable() {
     const parts = [];
     if (table.phase === 'betting' && mySeat.bet === 0) {
       parts.push(`<div class="lb-bet-form">
-        <input id="lbBetInput" type="number" min="1" placeholder="Ej: 200">
+        <input id="lbBetInput" type="number" min="1" placeholder="Apuesta principal">
+        <div class="lb-side-inputs">
+          <label>Pares<input id="lbPairsInput" type="number" min="0" placeholder="0"></label>
+          <label>21+3<input id="lbTrioInput" type="number" min="0" placeholder="0"></label>
+        </div>
         <button type="button" class="primary-btn" onclick="lbPlaceBet()">Apostar</button>
+        <p class="lb-help-note">Pares y 21+3 son opcionales: pagan aparte según tus cartas y la primera del dealer.</p>
       </div>`);
     }
-    if (myTurn) {
-      const canDouble = mySeat.cards.length === 2;
+    if (myTurn && myHand) {
+      const canDouble = myHand.cards.length === 2;
+      const canSplit = myHand.cards.length === 2 && myHand.cards[0].r === myHand.cards[1].r && mySeat.hands.length < 4;
       parts.push(`<div class="bj-actions lb-actions">
         <button type="button" onclick="lbHit()">Pedir carta</button>
         <button type="button" onclick="lbStand()">Plantarse</button>
         ${canDouble ? `<button type="button" class="bj-secondary" onclick="lbDouble()">Doblar</button>` : ''}
+        ${canSplit ? `<button type="button" class="bj-secondary" onclick="lbSplit()">Dividir</button>` : ''}
       </div>`);
     }
     if (!mySeat.leaving) parts.push(`<button type="button" class="reopen-btn" onclick="lbStandUp()">${icon('undo', 13)}Pararme de la mesa</button>`);

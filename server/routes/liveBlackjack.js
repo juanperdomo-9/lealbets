@@ -27,9 +27,12 @@ router.get('/state', requireAuth, (req, res) => {
 });
 router.post('/sit', requireAuth, handle(async (req) => { table.sitDown(req.userName); }));
 router.post('/stand-up', requireAuth, handle(async (req) => { await table.standUp(req.userName); }));
-router.post('/bet', requireAuth, handle(async (req) => { await table.placeBet(req.userName, Number(req.body.amount)); }));
+router.post('/bet', requireAuth, handle(async (req) => {
+  await table.placeBet(req.userName, Number(req.body.amount), Number(req.body.pairsStake), Number(req.body.trioStake));
+}));
 router.post('/hit', requireAuth, handle(async (req) => { await table.hit(req.userName); }));
 router.post('/stand', requireAuth, handle(async (req) => { await table.stand(req.userName); }));
 router.post('/double', requireAuth, handle(async (req) => { await table.doubleDown(req.userName); }));
+router.post('/split', requireAuth, handle(async (req) => { await table.split(req.userName); }));
 
 module.exports = router;
