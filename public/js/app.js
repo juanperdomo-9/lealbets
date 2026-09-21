@@ -3041,8 +3041,17 @@ function renderRoulette() {
 // (evento "table:update") apenas cambia algo — nadie necesita refrescar la
 // página para ver la jugada de otro. LB.table es simplemente la última foto
 // que mandó el servidor.
-let LB = { table: null, anim: { dealtForRound: null, dealOrder: {}, totalSlots: 0, revealedSlots: 0, timer: null }, lastBet: null };
-const LB_DEAL_STEP_MS = 450;
+let LB = {
+  table: null,
+  anim: {
+    dealtForRound: null, dealOrder: {}, totalSlots: 0, revealedSlots: 0, timer: null, startTimer: null,
+    settleForRound: null, settleRevealCount: 0, settleTotal: 0, settleTimer: null,
+  },
+  lastBet: null,
+};
+const LB_DEAL_START_DELAY_MS = 3000;
+const LB_DEAL_STEP_MS = 600;
+const LB_SETTLE_STEP_MS = 700;
 
 // arma el orden real de reparto de la ronda actual: una carta para cada
 // asiento en juego (en orden), después el dealer, y así dos vueltas — igual
@@ -3068,17 +3077,68 @@ function lbBuildDealOrder(table) {
 // otro asiento apostando o jugando su turno).
 function lbStartDealReveal(table) {
   if (LB.anim.timer) clearInterval(LB.anim.timer);
+  if (LB.anim.startTimer) clearTimeout(LB.anim.startTimer);
+  if (LB.anim.settleTimer) clearInterval(LB.anim.settleTimer);
   const order = lbBuildDealOrder(table);
   let totalSlots = 0;
   Object.values(order).forEach((arr) => arr.forEach((slot) => { if (slot != null) totalSlots = Math.max(totalSlots, slot + 1); }));
-  LB.anim = { dealtForRound: table.roundNumber, dealOrder: order, totalSlots, revealedSlots: totalSlots > 0 ? 1 : 0, timer: null };
-  if (totalSlots > 1) {
-    LB.anim.timer = setInterval(() => {
-      LB.anim.revealedSlots++;
-      if (LB.anim.revealedSlots >= totalSlots) { clearInterval(LB.anim.timer); LB.anim.timer = null; }
-      renderLiveTable();
-    }, LB_DEAL_STEP_MS);
+  LB.anim = {
+    dealtForRound: table.roundNumber, dealOrder: order, totalSlots, revealedSlots: 0, timer: null, startTimer: null,
+    settleForRound: null, settleRevealCount: 0, settleTotal: 0, settleTimer: null,
+  };
+  if (totalSlots === 0) return;
+  // pausa antes de largar a repartir (como cuando el dealer junta y corta el
+  // mazo) — recién después de esto empieza a salir la primera carta.
+  LB.anim.startTimer = setTimeout(() => {
+    LB.anim.startTimer = null;
+    LB.anim.revealedSlots = 1;
+    renderLiveTable();
+    if (totalSlots > 1) {
+      LB.anim.timer = setInterval(() => {
+        LB.anim.revealedSlots++;
+        if (LB.anim.revealedSlots >= totalSlots) { clearInterval(LB.anim.timer); LB.anim.timer = null; }
+        renderLiveTable();
+      }, LB_DEAL_STEP_MS);
+    }
+  }, LB_DEAL_START_DELAY_MS);
+}
+// al liquidar, el dealer destapa su carta tapada y pide lo que le falte —
+// eso llega del servidor ya resuelto (todas las cartas de una), así que acá
+// lo volvemos a repartir en el tiempo: primero se destapa la tapada, y
+// después cada carta que pidió, de a una, antes de mostrar el total del
+// dealer o quién ganó (así no se spoilea el resultado antes de tiempo).
+function lbStartSettleReveal(table) {
+  // si la ronda se liquidó más rápido de lo que tardaba en terminar de
+  // mostrarse el reparto inicial (por ejemplo alguien se planta enseguida,
+  // o son pocos jugadores), completamos ese reparto de una acá — no tiene
+  // sentido seguir goteando cartas del reparto una vez que ya se liquidó.
+  if (LB.anim.startTimer) { clearTimeout(LB.anim.startTimer); LB.anim.startTimer = null; }
+  if (LB.anim.timer) { clearInterval(LB.anim.timer); LB.anim.timer = null; }
+  LB.anim.revealedSlots = LB.anim.totalSlots;
+
+  if (LB.anim.settleTimer) clearInterval(LB.anim.settleTimer);
+  const extraCount = Math.max(0, table.dealerHand.length - 1);
+  const sawDeal = LB.anim.dealtForRound === table.roundNumber;
+  LB.anim.settleForRound = table.roundNumber;
+  LB.anim.settleTotal = extraCount;
+  if (!sawDeal) {
+    // abriste la mesa después de que esto ya se había resuelto: mostralo directo
+    LB.anim.settleRevealCount = extraCount;
+    LB.anim.settleTimer = null;
+    return;
   }
+  LB.anim.settleRevealCount = 0;
+  if (extraCount > 0) {
+    LB.anim.settleTimer = setInterval(() => {
+      LB.anim.settleRevealCount++;
+      if (LB.anim.settleRevealCount >= extraCount) { clearInterval(LB.anim.settleTimer); LB.anim.settleTimer = null; }
+      renderLiveTable();
+    }, LB_SETTLE_STEP_MS);
+  }
+}
+function lbDealerFullyRevealed(table) {
+  if (table.dealerHidden) return false;
+  return LB.anim.settleRevealCount >= Math.max(0, table.dealerHand.length - 1);
 }
 // cuántas cartas de esta mano ya le tocó aparecer. Las que se piden
 // DESPUÉS del reparto inicial (pedir carta, dividir) quedan fuera del
@@ -3105,12 +3165,14 @@ function lbDealerCardsHtml(table) {
   const dealing = table.phase === 'playing' || table.phase === 'payout';
   if (!dealing) return '';
   const order = LB.anim.dealOrder.d;
-  if (!order) return table.dealerHand.map((c) => lbCardHtml(c)).join('');
-  let html = '';
-  if (order[0] < LB.anim.revealedSlots) html += lbCardHtml(table.dealerHand[0]);
-  if (order[1] < LB.anim.revealedSlots) {
-    html += table.dealerHidden ? lbCardHtml(null) : lbCardHtml(table.dealerHand[1]);
-    if (!table.dealerHidden) table.dealerHand.slice(2).forEach((c) => { html += lbCardHtml(c); });
+  const firstVisible = !order || order[0] < LB.anim.revealedSlots;
+  let html = firstVisible ? lbCardHtml(table.dealerHand[0]) : '';
+  if (table.dealerHidden) {
+    // todavía en juego: el dorso de la 2ª carta espera su turno del reparto inicial
+    if (!order || order[1] < LB.anim.revealedSlots) html += lbCardHtml(null);
+  } else if (firstVisible) {
+    // liquidando: se destapan la tapada + lo que pidió, de a una (lbStartSettleReveal)
+    table.dealerHand.slice(1, 1 + LB.anim.settleRevealCount).forEach((c) => { html += lbCardHtml(c); });
   }
   return html;
 }
@@ -3157,7 +3219,10 @@ function lbHandHtml(hand, seatIndex, handIndex, isActive) {
   const visibleCards = hand.cards.slice(0, visibleCount);
   const cardsHtml = visibleCards.map((c) => lbCardHtml(c)).join('');
   const total = visibleCards.length ? `<div class="lb-total">${bjHandTotal(visibleCards)}</div>` : '';
-  const fullyRevealed = visibleCount === hand.cards.length;
+  // el resultado final (ganó/perdió) espera a que el dealer termine de
+  // destaparse — si no, se spoilea antes de que termine la animación del dealer.
+  const dealerReady = hand.status !== 'done' || lbDealerFullyRevealed(LB.table);
+  const fullyRevealed = visibleCount === hand.cards.length && dealerReady;
   return `<div class="lb-hand${isActive ? ' lb-hand-active' : ''}">
     ${hand.bet > 0 ? `<div class="lb-seat-bet">${icon('wallet', 10)}${hand.bet}</div>` : ''}
     <div class="lb-seat-cards">${cardsHtml}</div>
@@ -3231,6 +3296,9 @@ function renderLiveTable() {
   // de roundNumber (si no, el mapa de orden se arma con las manos vacías de
   // antes de apostar y el reparto real ya no se vuelve a animar).
   if (table.phase === 'playing' && LB.anim.dealtForRound !== table.roundNumber) lbStartDealReveal(table);
+  // se acaba de liquidar (el dealer destapó su tapada): arranca su propio
+  // reparto pausado antes de mostrar el total del dealer o quién ganó.
+  if (!table.dealerHidden && LB.anim.settleForRound !== table.roundNumber) lbStartSettleReveal(table);
 
   // guardamos lo que el jugador esté tipeando en el formulario de apuesta
   // (y qué campo tiene el foco) antes de reconstruir todo el HTML de la
