@@ -3041,13 +3041,13 @@ function renderRoulette() {
 // (evento "table:update") apenas cambia algo — nadie necesita refrescar la
 // página para ver la jugada de otro. LB.table es simplemente la última foto
 // que mandó el servidor.
-let LB = { table: null, anim: { roundNumber: -1, counts: {}, dealOrder: {} }, lastBet: null };
+let LB = { table: null, anim: { dealtForRound: null, dealOrder: {}, totalSlots: 0, revealedSlots: 0, timer: null }, lastBet: null };
+const LB_DEAL_STEP_MS = 260;
 
 // arma el orden real de reparto de la ronda actual: una carta para cada
 // asiento en juego (en orden), después el dealer, y así dos vueltas — igual
 // que en una mesa de verdad (server/liveBlackjack.js reparte en ese mismo
-// orden). Sirve para animar la primera aparición de cada carta en el orden
-// correcto en vez de que cada mano se complete de una.
+// orden).
 function lbBuildDealOrder(table) {
   const map = {};
   let slot = 0;
@@ -3059,34 +3059,60 @@ function lbBuildDealOrder(table) {
   }
   return map;
 }
-// las cartas nuevas desde el último render (dentro de la misma ronda) se
-// marcan para que la CSS las anime entrando de a una — como reemplazamos
-// todo el innerHTML en cada actualización, sin este rastreo cada broadcast
-// (aunque sea de otro asiento) volvería a animar TODAS las cartas ya
-// repartidas, no solo la nueva. La primerísima vez que aparece una mano en
-// la ronda, además, usa el orden real de reparto (lbBuildDealOrder) en vez
-// de un índice local, para que se vea "una carta por jugador, después el
-// dealer" y no "todas las cartas de un jugador de una".
-function lbCardsWithAnim(cards, key) {
-  if (LB.anim.roundNumber !== LB.table.roundNumber) {
-    LB.anim = { roundNumber: LB.table.roundNumber, counts: {}, dealOrder: lbBuildDealOrder(LB.table) };
+// arranca el reparto animado de la ronda: en vez de mostrar todas las
+// cartas ya repartidas de una (llegan todas juntas en el mismo mensaje del
+// servidor), las vamos "revelando" en el cliente a un ritmo fijo según el
+// orden real de la mesa (lbBuildDealOrder) — recién cuando le toca el turno
+// a una carta, esta función aparece en el render. Sigue corriendo sola con
+// un timer aunque mientras tanto lleguen otras actualizaciones (por ejemplo
+// otro asiento apostando o jugando su turno).
+function lbStartDealReveal(table) {
+  if (LB.anim.timer) clearInterval(LB.anim.timer);
+  const order = lbBuildDealOrder(table);
+  let totalSlots = 0;
+  Object.values(order).forEach((arr) => arr.forEach((slot) => { if (slot != null) totalSlots = Math.max(totalSlots, slot + 1); }));
+  LB.anim = { dealtForRound: table.roundNumber, dealOrder: order, totalSlots, revealedSlots: totalSlots > 0 ? 1 : 0, timer: null };
+  if (totalSlots > 1) {
+    LB.anim.timer = setInterval(() => {
+      LB.anim.revealedSlots++;
+      if (LB.anim.revealedSlots >= totalSlots) { clearInterval(LB.anim.timer); LB.anim.timer = null; }
+      renderLiveTable();
+    }, LB_DEAL_STEP_MS);
   }
-  const prevCount = LB.anim.counts[key] || 0;
-  const order = prevCount === 0 ? LB.anim.dealOrder[key] : null;
-  const html = cards.map((c, i) => {
-    if (i < prevCount) return lbCardHtml(c, null);
-    const stagger = order && order[i] != null ? order[i] : (i - prevCount);
-    return lbCardHtml(c, stagger);
-  }).join('');
-  LB.anim.counts[key] = cards.length;
-  return html;
 }
-function lbCardHtml(card, staggerIndex) {
-  const animAttr = staggerIndex != null ? ` style="animation-delay:${staggerIndex * 180}ms"` : '';
-  const animCls = staggerIndex != null ? ' lb-card-deal' : '';
-  if (!card) return `<div class="lb-card lb-card-hidden${animCls}"${animAttr}></div>`;
+// cuántas cartas de esta mano ya le tocó aparecer. Las que se piden
+// DESPUÉS del reparto inicial (pedir carta, dividir) quedan fuera del
+// conteo del reparto sincronizado y se muestran directo, sin esperar.
+function lbRevealedCount(cardsLength, key) {
+  const order = LB.anim.dealOrder[key];
+  if (!order) return cardsLength;
+  let n = 0;
+  for (let i = 0; i < cardsLength; i++) {
+    if (i < order.length) {
+      if (order[i] < LB.anim.revealedSlots) n = i + 1; else break;
+    } else {
+      n = i + 1;
+    }
+  }
+  return n;
+}
+function lbCardHtml(card) {
+  if (!card) return `<div class="lb-card lb-card-hidden lb-card-deal"></div>`;
   const red = card.s === '♥' || card.s === '♦';
-  return `<div class="lb-card${red ? ' lb-card-red' : ''}${animCls}"${animAttr}>${card.r}${card.s}</div>`;
+  return `<div class="lb-card${red ? ' lb-card-red' : ''} lb-card-deal">${card.r}${card.s}</div>`;
+}
+function lbDealerCardsHtml(table) {
+  const dealing = table.phase === 'playing' || table.phase === 'payout';
+  if (!dealing) return '';
+  const order = LB.anim.dealOrder.d;
+  if (!order) return table.dealerHand.map((c) => lbCardHtml(c)).join('');
+  let html = '';
+  if (order[0] < LB.anim.revealedSlots) html += lbCardHtml(table.dealerHand[0]);
+  if (order[1] < LB.anim.revealedSlots) {
+    html += table.dealerHidden ? lbCardHtml(null) : lbCardHtml(table.dealerHand[1]);
+    if (!table.dealerHidden) table.dealerHand.slice(2).forEach((c) => { html += lbCardHtml(c); });
+  }
+  return html;
 }
 function lbMySeat(table) {
   return ME ? table.seats.find((s) => s && s.userName === ME) : null;
@@ -3126,13 +3152,17 @@ function lbHandStatusHtml(hand) {
   return '';
 }
 function lbHandHtml(hand, seatIndex, handIndex, isActive) {
-  const cardsHtml = hand.cards.length ? lbCardsWithAnim(hand.cards, `s${seatIndex}h${handIndex}`) : '';
-  const total = hand.cards.length ? `<div class="lb-total">${bjHandTotal(hand.cards)}</div>` : '';
+  const key = `s${seatIndex}h${handIndex}`;
+  const visibleCount = lbRevealedCount(hand.cards.length, key);
+  const visibleCards = hand.cards.slice(0, visibleCount);
+  const cardsHtml = visibleCards.map((c) => lbCardHtml(c)).join('');
+  const total = visibleCards.length ? `<div class="lb-total">${bjHandTotal(visibleCards)}</div>` : '';
+  const fullyRevealed = visibleCount === hand.cards.length;
   return `<div class="lb-hand${isActive ? ' lb-hand-active' : ''}">
     ${hand.bet > 0 ? `<div class="lb-seat-bet">${icon('wallet', 10)}${hand.bet}</div>` : ''}
     <div class="lb-seat-cards">${cardsHtml}</div>
     ${total}
-    ${lbHandStatusHtml(hand)}
+    ${fullyRevealed ? lbHandStatusHtml(hand) : ''}
   </div>`;
 }
 function lbSeatHtml(seat, index, table) {
@@ -3195,15 +3225,42 @@ function renderLiveTable() {
   const table = LB.table;
   if (!table) { field.innerHTML = `<div class="lb-field"><div class="empty">${icon('clock', 24)}Conectando con la mesa…</div></div>`; return; }
 
+  // el servidor sube roundNumber apenas ABRE la fase de apuestas (todavía
+  // sin cartas) — el reparto de verdad llega recién cuando la fase pasa a
+  // "playing", así que hay que enganchar la animación ahí, no en el cambio
+  // de roundNumber (si no, el mapa de orden se arma con las manos vacías de
+  // antes de apostar y el reparto real ya no se vuelve a animar).
+  if (table.phase === 'playing' && LB.anim.dealtForRound !== table.roundNumber) lbStartDealReveal(table);
+
+  // guardamos lo que el jugador esté tipeando en el formulario de apuesta
+  // (y qué campo tiene el foco) antes de reconstruir todo el HTML de la
+  // mesa: llega una actualización por socket cada vez que CUALQUIERA en la
+  // mesa hace algo (apostar, pedir carta, etc.), no solo cuando vos hacés
+  // algo, así que sin esto se te borraría lo que estabas tipeando.
+  const preserveIds = ['lbBetInput', 'lbPairsInput', 'lbTrioInput'];
+  const preserved = {};
+  let focusedId = null;
+  preserveIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      preserved[id] = el.value;
+      if (document.activeElement === el) focusedId = id;
+    }
+  });
+
   const secs = lbSecondsLeft(table);
   const mySeat = lbMySeat(table);
   const seatedIdx = mySeat ? table.seats.findIndex((s) => s === mySeat) : -1;
   const myTurn = table.phase === 'playing' && seatedIdx !== -1 && table.currentSeatIndex === seatedIdx;
   const myHand = myTurn ? mySeat.hands[table.currentHandIndex] : null;
+  // no mostramos los botones de jugar hasta que termines de ver tus propias
+  // cartas aparecer — si no, el turno podría estar listo del lado del
+  // servidor mientras tu reparto todavía se está animando.
+  const myHandRevealed = myHand ? lbRevealedCount(myHand.cards.length, `s${seatedIdx}h${table.currentHandIndex}`) === myHand.cards.length : false;
   const tableFull = table.seats.every(Boolean);
-  const dealing = table.phase === 'playing' || table.phase === 'payout';
-  const dealerCardsHtml = lbCardsWithAnim(table.dealerHand, 'd') + (dealing && table.dealerHidden ? lbCardHtml(null) : '');
-  const dealerTotal = table.dealerHidden ? '' : `<div class="lb-total">${bjHandTotal(table.dealerHand)}</div>`;
+  const dealerCardsHtml = lbDealerCardsHtml(table);
+  const dealerFullyRevealed = !LB.anim.dealOrder.d || LB.anim.dealOrder.d[1] < LB.anim.revealedSlots;
+  const dealerTotal = (!table.dealerHidden && dealerFullyRevealed) ? `<div class="lb-total">${bjHandTotal(table.dealerHand)}</div>` : '';
 
   let controlsHtml = '';
   if (!ME) {
@@ -3228,7 +3285,7 @@ function renderLiveTable() {
         <p class="lb-help-note">Pares y 21+3 son opcionales: pagan aparte según tus cartas y la primera del dealer.</p>
       </div>`);
     }
-    if (myTurn && myHand) {
+    if (myTurn && myHand && myHandRevealed) {
       const canDouble = myHand.cards.length === 2;
       const canSplit = myHand.cards.length === 2 && myHand.cards[0].r === myHand.cards[1].r && mySeat.hands.length < 4;
       parts.push(`<div class="bj-actions lb-actions">
@@ -3258,6 +3315,16 @@ function renderLiveTable() {
     </div>
     <div class="lb-controls">${controlsHtml}</div>
   </div>`;
+
+  preserveIds.forEach((id) => {
+    if (preserved[id] === undefined) return;
+    const el = document.getElementById(id);
+    if (el) el.value = preserved[id];
+  });
+  if (focusedId) {
+    const el = document.getElementById(focusedId);
+    if (el) el.focus();
+  }
 }
 // el contador de segundos se actualiza solo (sin pedir nada al servidor):
 // el socket ya mandó cuándo termina la fase, así que alcanza con recalcular

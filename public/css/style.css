@@ -1110,17 +1110,18 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .lb-hand-active{box-shadow:0 0 0 2px var(--gold), 0 0 10px rgba(240,194,90,.5); border-radius:8px;}
 .lb-side-result{font-size:9.5px; color:var(--chalk-faint); text-align:center; line-height:1.4; max-width:104px;}
 /* cartas chicas, propias de la mesa en vivo (más chicas que las de la mesa
-   de Blackjack solo, para que entren varias manos a la vez en pantalla). Las
-   viejas se dibujan directo (sin animación) y solo las recién repartidas
-   llevan .lb-card-deal con un animation-delay escalonado (puesto por JS) —
-   así el reparto se ve carta por carta en vez de todas de golpe. */
+   de Blackjack solo, para que entren varias manos a la vez en pantalla). El
+   reparto en sí (una carta por asiento, después el dealer, dos vueltas) lo
+   controla app.js con un timer (lbStartDealReveal): cada carta recién
+   aparece en el DOM cuando le toca su turno, así que alcanza con una
+   animación de entrada simple acá, sin retraso. */
 .lb-card{
   width:28px;height:38px;background:linear-gradient(160deg,#fff,#e9e4d3);color:var(--ink);border-radius:5px;
   display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:10.5px;font-weight:700;
   box-shadow:0 2px 5px rgba(0,0,0,.3);
 }
-.lb-card-deal{animation:lbCardDeal .38s cubic-bezier(.22,.85,.3,1.2) both;}
-@keyframes lbCardDeal{from{opacity:0; transform:translateY(-16px) scale(.75) rotate(-6deg);}to{opacity:1; transform:none;}}
+.lb-card-deal{animation:lbCardDeal .24s cubic-bezier(.22,.85,.3,1.2) both;}
+@keyframes lbCardDeal{from{opacity:0; transform:translateY(-14px) scale(.8) rotate(-5deg);}to{opacity:1; transform:none;}}
 .lb-card-red{color:var(--red);}
 .lb-card-hidden{background:repeating-linear-gradient(45deg, var(--surface-hover) 0 4px, var(--surface-2) 4px 8px); border:1px solid var(--gold-2);}
 .lb-controls{display:flex; flex-direction:column; align-items:stretch; gap:10px;}
