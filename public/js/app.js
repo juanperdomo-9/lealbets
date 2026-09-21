@@ -3042,7 +3042,7 @@ function renderRoulette() {
 // página para ver la jugada de otro. LB.table es simplemente la última foto
 // que mandó el servidor.
 let LB = { table: null, anim: { dealtForRound: null, dealOrder: {}, totalSlots: 0, revealedSlots: 0, timer: null }, lastBet: null };
-const LB_DEAL_STEP_MS = 260;
+const LB_DEAL_STEP_MS = 450;
 
 // arma el orden real de reparto de la ronda actual: una carta para cada
 // asiento en juego (en orden), después el dealer, y así dos vueltas — igual

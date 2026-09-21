@@ -1120,7 +1120,7 @@ section.active{display:block;animation:fadeIn .25s ease;}
   display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:10.5px;font-weight:700;
   box-shadow:0 2px 5px rgba(0,0,0,.3);
 }
-.lb-card-deal{animation:lbCardDeal .24s cubic-bezier(.22,.85,.3,1.2) both;}
+.lb-card-deal{animation:lbCardDeal .32s cubic-bezier(.22,.85,.3,1.2) both;}
 @keyframes lbCardDeal{from{opacity:0; transform:translateY(-14px) scale(.8) rotate(-5deg);}to{opacity:1; transform:none;}}
 .lb-card-red{color:var(--red);}
 .lb-card-hidden{background:repeating-linear-gradient(45deg, var(--surface-hover) 0 4px, var(--surface-2) 4px 8px); border:1px solid var(--gold-2);}
