@@ -1137,6 +1137,11 @@ section.active{display:block;animation:fadeIn .25s ease;}
 }
 .lb-side-inputs input{padding:8px 10px; font-size:13px;}
 .lb-actions{margin:0;}
+.lb-repeat-btn{
+  margin:0 0 2px; border-color:var(--gold-2); color:var(--gold);
+  display:flex; align-items:center; justify-content:center; gap:6px;
+}
+.lb-repeat-btn:hover{background:var(--gold-soft);}
 
 /* ---------------------------------- admin ---------------------------------- */
 .card{

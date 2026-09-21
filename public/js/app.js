@@ -3041,22 +3041,48 @@ function renderRoulette() {
 // (evento "table:update") apenas cambia algo — nadie necesita refrescar la
 // página para ver la jugada de otro. LB.table es simplemente la última foto
 // que mandó el servidor.
-let LB = { table: null, anim: { roundNumber: -1, counts: {} } };
+let LB = { table: null, anim: { roundNumber: -1, counts: {}, dealOrder: {} }, lastBet: null };
 
+// arma el orden real de reparto de la ronda actual: una carta para cada
+// asiento en juego (en orden), después el dealer, y así dos vueltas — igual
+// que en una mesa de verdad (server/liveBlackjack.js reparte en ese mismo
+// orden). Sirve para animar la primera aparición de cada carta en el orden
+// correcto en vez de que cada mano se complete de una.
+function lbBuildDealOrder(table) {
+  const map = {};
+  let slot = 0;
+  for (let lap = 0; lap < 2; lap++) {
+    table.seats.forEach((s, i) => {
+      if (s && s.hands.length === 1) (map[`s${i}h0`] || (map[`s${i}h0`] = []))[lap] = slot++;
+    });
+    (map.d || (map.d = []))[lap] = slot++;
+  }
+  return map;
+}
 // las cartas nuevas desde el último render (dentro de la misma ronda) se
 // marcan para que la CSS las anime entrando de a una — como reemplazamos
 // todo el innerHTML en cada actualización, sin este rastreo cada broadcast
 // (aunque sea de otro asiento) volvería a animar TODAS las cartas ya
-// repartidas, no solo la nueva.
+// repartidas, no solo la nueva. La primerísima vez que aparece una mano en
+// la ronda, además, usa el orden real de reparto (lbBuildDealOrder) en vez
+// de un índice local, para que se vea "una carta por jugador, después el
+// dealer" y no "todas las cartas de un jugador de una".
 function lbCardsWithAnim(cards, key) {
-  if (LB.anim.roundNumber !== LB.table.roundNumber) LB.anim = { roundNumber: LB.table.roundNumber, counts: {} };
+  if (LB.anim.roundNumber !== LB.table.roundNumber) {
+    LB.anim = { roundNumber: LB.table.roundNumber, counts: {}, dealOrder: lbBuildDealOrder(LB.table) };
+  }
   const prevCount = LB.anim.counts[key] || 0;
-  const html = cards.map((c, i) => lbCardHtml(c, i >= prevCount ? i - prevCount : null)).join('');
+  const order = prevCount === 0 ? LB.anim.dealOrder[key] : null;
+  const html = cards.map((c, i) => {
+    if (i < prevCount) return lbCardHtml(c, null);
+    const stagger = order && order[i] != null ? order[i] : (i - prevCount);
+    return lbCardHtml(c, stagger);
+  }).join('');
   LB.anim.counts[key] = cards.length;
   return html;
 }
 function lbCardHtml(card, staggerIndex) {
-  const animAttr = staggerIndex != null ? ` style="animation-delay:${staggerIndex * 220}ms"` : '';
+  const animAttr = staggerIndex != null ? ` style="animation-delay:${staggerIndex * 180}ms"` : '';
   const animCls = staggerIndex != null ? ' lb-card-deal' : '';
   if (!card) return `<div class="lb-card lb-card-hidden${animCls}"${animAttr}></div>`;
   const red = card.s === '♥' || card.s === '♦';
@@ -3141,12 +3167,22 @@ async function lbSit() {
 async function lbStandUp() {
   try { await apiFetch('/live-blackjack/stand-up', { method: 'POST' }); } catch (e) { toast(e.message); }
 }
+async function lbSendBet(amount, pairsStake, trioStake) {
+  try {
+    await apiFetch('/live-blackjack/bet', { method: 'POST', body: { amount, pairsStake, trioStake } });
+    LB.lastBet = { amount, pairsStake, trioStake }; // para el botón de "repetir apuesta" de la próxima ronda
+  } catch (e) { toast(e.message); }
+}
 async function lbPlaceBet() {
   const amount = parseInt(document.getElementById('lbBetInput').value, 10);
   if (!amount || amount <= 0) { toast('Poné un monto válido para la mano principal'); return; }
   const pairsStake = parseInt(document.getElementById('lbPairsInput').value, 10) || 0;
   const trioStake = parseInt(document.getElementById('lbTrioInput').value, 10) || 0;
-  try { await apiFetch('/live-blackjack/bet', { method: 'POST', body: { amount, pairsStake, trioStake } }); } catch (e) { toast(e.message); }
+  await lbSendBet(amount, pairsStake, trioStake);
+}
+async function lbRepeatBet() {
+  if (!LB.lastBet) return;
+  await lbSendBet(LB.lastBet.amount, LB.lastBet.pairsStake, LB.lastBet.trioStake);
 }
 async function lbHit() { try { await apiFetch('/live-blackjack/hit', { method: 'POST' }); } catch (e) { toast(e.message); } }
 async function lbStand() { try { await apiFetch('/live-blackjack/stand', { method: 'POST' }); } catch (e) { toast(e.message); } }
@@ -3177,6 +3213,11 @@ function renderLiveTable() {
   } else {
     const parts = [];
     if (table.phase === 'betting' && mySeat.bet === 0) {
+      if (LB.lastBet) {
+        const lb = LB.lastBet;
+        const detail = [lb.pairsStake ? `+${lb.pairsStake} pares` : '', lb.trioStake ? `+${lb.trioStake} 21+3` : ''].filter(Boolean).join(' ');
+        parts.push(`<button type="button" class="reopen-btn lb-repeat-btn" onclick="lbRepeatBet()">${icon('shuffle', 13)}Repetir apuesta: ${lb.amount}${detail ? ' ' + detail : ''}</button>`);
+      }
       parts.push(`<div class="lb-bet-form">
         <input id="lbBetInput" type="number" min="1" placeholder="Apuesta principal">
         <div class="lb-side-inputs">

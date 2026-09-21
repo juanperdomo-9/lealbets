@@ -18,7 +18,7 @@ const { freshShoe, classifyPair, classifyTrio, handTotal, isBlackjack, playDeale
 const { broadcastTableUpdate } = require('./realtime');
 
 const NUM_SEATS = 5;
-const BETTING_MS = 30000;
+const BETTING_MS = 60000;
 const TURN_MS = 20000;
 const PAYOUT_MS = 7000;
 const TICK_MS = 1000;
@@ -170,14 +170,26 @@ async function advanceTurn() {
 async function dealRound() {
   const participants = participantIndices();
   table.deck = freshShoe();
-  table.dealerHand = [table.deck.pop(), table.deck.pop()];
-  table.dealerHidden = true;
   participants.forEach((i) => {
     const seat = table.seats[i];
-    const cards = [table.deck.pop(), table.deck.pop()];
-    seat.hands = [{ cards, bet: seat.bet, status: isBlackjack(cards) ? 'blackjack' : 'playing', isSplitResult: false, result: null, payout: 0 }];
+    seat.hands = [{ cards: [], bet: seat.bet, status: 'playing', isSplitResult: false, result: null, payout: 0 }];
     seat.status = 'playing';
     seat.sideWinnings = 0;
+  });
+  table.dealerHand = [];
+  table.dealerHidden = true;
+  // reparto real de mesa: una carta para cada jugador (en orden de asiento),
+  // después una para el dealer, y así dos vueltas — no todas las cartas de
+  // un jugador de una, como en una mesa de verdad.
+  for (let lap = 0; lap < 2; lap++) {
+    participants.forEach((i) => { table.seats[i].hands[0].cards.push(table.deck.pop()); });
+    table.dealerHand.push(table.deck.pop());
+  }
+  participants.forEach((i) => {
+    const seat = table.seats[i];
+    const hand = seat.hands[0];
+    const cards = hand.cards;
+    hand.status = isBlackjack(cards) ? 'blackjack' : 'playing';
     // side bets: se calculan ya (con las 2 cartas propias + la carta de
     // arriba del dealer) pero se pagan recién al liquidar, como todo lo demás.
     const sideMsgs = [];
