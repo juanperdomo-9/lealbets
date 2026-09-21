@@ -1962,6 +1962,10 @@ async function refreshFromServer(skipAdmin) {
 function connectSocket() {
   const socket = io();
   socket.on('state:update', () => refreshFromServer(true));
+  // la mesa en vivo manda su estado directo por socket (sin este ida y
+  // vuelta a /api/state): así todos los sentados ven la jugada del otro en
+  // el momento, no recién en el próximo refresco general.
+  socket.on('table:update', (table) => { LB.table = table; renderLiveTable(); });
   // red de contención por si el socket se corta: refresco periódico igual.
   setInterval(() => refreshFromServer(true), 20000);
 }
@@ -2145,6 +2149,7 @@ function setCasinoView(view) {
   else if (view === 'mines') mnLoadState();
   else if (view === 'slots') slLoadState();
   else if (view === 'roulette') renderRoulette();
+  else if (view === 'live-blackjack') lbLoadState();
 }
 
 // ---------- penales (tanda de penaltis) ----------
@@ -3028,6 +3033,161 @@ function renderRoulette() {
     ${RL.lastResultText ? `<div class="rl-result${RL.lastWon ? ' rl-win' : ''}">${RL.lastResultText}</div>` : ''}
   `;
 }
+
+// ---------- mesa de blackjack en vivo ----------
+// a diferencia de todo lo demás en este archivo, esto NO es "pedís una
+// acción, el servidor contesta": la mesa es un solo estado COMPARTIDO entre
+// todos los que están sentados, que le llega a todo el mundo por socket
+// (evento "table:update") apenas cambia algo — nadie necesita refrescar la
+// página para ver la jugada de otro. LB.table es simplemente la última foto
+// que mandó el servidor.
+let LB = { table: null };
+
+function lbCardHtml(card) {
+  if (!card) return `<div class="lb-card lb-card-hidden"></div>`;
+  const red = card.s === '♥' || card.s === '♦';
+  return `<div class="lb-card${red ? ' lb-card-red' : ''}">${card.r}${card.s}</div>`;
+}
+function lbMySeat(table) {
+  return ME ? table.seats.find((s) => s && s.userName === ME) : null;
+}
+function lbPhaseLabel(table) {
+  if (table.phase === 'waiting') return 'Mesa vacía — sentate para arrancarla';
+  if (table.phase === 'betting') return 'Apuestas abiertas';
+  if (table.phase === 'playing') {
+    const seat = table.currentSeatIndex != null ? table.seats[table.currentSeatIndex] : null;
+    return seat ? `Turno de ${seat.userName}` : 'Jugando…';
+  }
+  if (table.phase === 'payout') return 'Resultados de la ronda';
+  return '';
+}
+function lbSecondsLeft(table) {
+  if (!table.phaseEndsAt) return null;
+  return Math.max(0, Math.ceil((table.phaseEndsAt - Date.now()) / 1000));
+}
+function lbSeatStatusHtml(seat) {
+  if (seat.status === 'seated') return `<span class="lb-status">sentado</span>`;
+  if (seat.status === 'betting') return `<span class="lb-status">apostó ${seat.bet}</span>`;
+  if (seat.status === 'playing') return `<span class="lb-status lb-status-live">jugando…</span>`;
+  if (seat.status === 'stood') return `<span class="lb-status">plantado</span>`;
+  if (seat.status === 'busted') return `<span class="lb-status lb-status-lose">se pasó</span>`;
+  if (seat.status === 'blackjack') return `<span class="lb-status lb-status-win">¡blackjack!</span>`;
+  if (seat.status === 'done') {
+    if (seat.result === 'win') return `<span class="lb-status lb-status-win">ganó ${seat.payout}</span>`;
+    if (seat.result === 'blackjack') return `<span class="lb-status lb-status-win">¡blackjack! ganó ${seat.payout}</span>`;
+    if (seat.result === 'push') return `<span class="lb-status">empate</span>`;
+    return `<span class="lb-status lb-status-lose">perdió</span>`;
+  }
+  return '';
+}
+function lbSeatHtml(seat, index, table) {
+  if (!seat) {
+    return `<div class="lb-seat lb-seat-empty">
+      <div class="lb-seat-avatar lb-seat-avatar-empty">${icon('users', 16)}</div>
+      ${ME ? `<button type="button" class="reopen-btn lb-sit-btn" onclick="lbSit()">Sentarme</button>` : `<span class="lb-status">vacío</span>`}
+    </div>`;
+  }
+  const isMe = seat.userName === ME;
+  const isTurn = table.phase === 'playing' && table.currentSeatIndex === index;
+  const cardsHtml = seat.cards.length ? seat.cards.map((c) => lbCardHtml(c)).join('') : '';
+  const total = seat.cards.length ? `<div class="lb-total">${bjHandTotal(seat.cards)}</div>` : '';
+  return `<div class="lb-seat${isMe ? ' lb-seat-me' : ''}${isTurn ? ' lb-seat-turn' : ''}">
+    <div class="lb-seat-avatar">${seat.userName.charAt(0).toUpperCase()}</div>
+    <div class="lb-seat-name">${seat.userName}${isMe ? ' (vos)' : ''}</div>
+    ${seat.bet > 0 ? `<div class="lb-seat-bet">${icon('wallet', 11)}${seat.bet}</div>` : ''}
+    <div class="lb-seat-cards">${cardsHtml}</div>
+    ${total}
+    ${lbSeatStatusHtml(seat)}
+  </div>`;
+}
+
+async function lbLoadState() {
+  try { LB.table = await apiFetch('/live-blackjack/state'); } catch (e) { /* se reintenta con el próximo socket update */ }
+  renderLiveTable();
+}
+async function lbSit() {
+  if (!ME) { toast('Entrá con tu usuario para jugar'); return; }
+  try { await apiFetch('/live-blackjack/sit', { method: 'POST' }); } catch (e) { toast(e.message); }
+}
+async function lbStandUp() {
+  try { await apiFetch('/live-blackjack/stand-up', { method: 'POST' }); } catch (e) { toast(e.message); }
+}
+async function lbPlaceBet() {
+  const amount = parseInt(document.getElementById('lbBetInput').value, 10);
+  if (!amount || amount <= 0) { toast('Poné un monto válido'); return; }
+  try { await apiFetch('/live-blackjack/bet', { method: 'POST', body: { amount } }); } catch (e) { toast(e.message); }
+}
+async function lbHit() { try { await apiFetch('/live-blackjack/hit', { method: 'POST' }); } catch (e) { toast(e.message); } }
+async function lbStand() { try { await apiFetch('/live-blackjack/stand', { method: 'POST' }); } catch (e) { toast(e.message); } }
+async function lbDouble() { try { await apiFetch('/live-blackjack/double', { method: 'POST' }); } catch (e) { toast(e.message); } }
+
+function renderLiveTable() {
+  const field = document.getElementById('liveTableField');
+  if (!field) return;
+  const table = LB.table;
+  if (!table) { field.innerHTML = `<div class="lb-field"><div class="empty">${icon('clock', 24)}Conectando con la mesa…</div></div>`; return; }
+
+  const secs = lbSecondsLeft(table);
+  const mySeat = lbMySeat(table);
+  const seatedIdx = mySeat ? table.seats.findIndex((s) => s === mySeat) : -1;
+  const myTurn = table.phase === 'playing' && seatedIdx !== -1 && table.currentSeatIndex === seatedIdx;
+  const tableFull = table.seats.every(Boolean);
+  const dealing = table.phase === 'playing' || table.phase === 'payout';
+  const dealerCardsHtml = table.dealerHand.map((c) => lbCardHtml(c)).join('') + (dealing && table.dealerHidden ? lbCardHtml(null) : '');
+  const dealerTotal = table.dealerHidden ? '' : `<div class="lb-total">${bjHandTotal(table.dealerHand)}</div>`;
+
+  let controlsHtml = '';
+  if (!ME) {
+    controlsHtml = `<div class="empty">${icon('lock', 22)}Entrá con tu usuario para sentarte.</div>`;
+  } else if (!mySeat) {
+    controlsHtml = `<button type="button" class="primary-btn lb-wide-btn" onclick="lbSit()" ${tableFull ? 'disabled' : ''}>${tableFull ? 'Mesa llena' : 'Sentarme a la mesa'}</button>`;
+  } else {
+    const parts = [];
+    if (table.phase === 'betting' && mySeat.bet === 0) {
+      parts.push(`<div class="lb-bet-form">
+        <input id="lbBetInput" type="number" min="1" placeholder="Ej: 200">
+        <button type="button" class="primary-btn" onclick="lbPlaceBet()">Apostar</button>
+      </div>`);
+    }
+    if (myTurn) {
+      const canDouble = mySeat.cards.length === 2;
+      parts.push(`<div class="bj-actions lb-actions">
+        <button type="button" onclick="lbHit()">Pedir carta</button>
+        <button type="button" onclick="lbStand()">Plantarse</button>
+        ${canDouble ? `<button type="button" class="bj-secondary" onclick="lbDouble()">Doblar</button>` : ''}
+      </div>`);
+    }
+    if (!mySeat.leaving) parts.push(`<button type="button" class="reopen-btn" onclick="lbStandUp()">${icon('undo', 13)}Pararme de la mesa</button>`);
+    else parts.push(`<p class="lb-help-note">Te vas a parar apenas termine esta ronda.</p>`);
+    controlsHtml = parts.join('');
+  }
+
+  field.innerHTML = `<div class="lb-field">
+    <div class="lb-phase-banner${table.phase === 'playing' ? ' lb-phase-live' : ''}">
+      <span>${lbPhaseLabel(table)}</span>
+      ${secs !== null ? `<b id="lbTimer">${secs}s</b>` : ''}
+    </div>
+    <div class="lb-table">
+      <div class="lb-dealer">
+        <div class="lb-dealer-label">Dealer</div>
+        <div class="lb-seat-cards">${dealerCardsHtml}</div>
+        ${dealerTotal}
+      </div>
+      <div class="lb-seats">${table.seats.map((s, i) => lbSeatHtml(s, i, table)).join('')}</div>
+    </div>
+    <div class="lb-controls">${controlsHtml}</div>
+  </div>`;
+}
+// el contador de segundos se actualiza solo (sin pedir nada al servidor):
+// el socket ya mandó cuándo termina la fase, así que alcanza con recalcular
+// contra el reloj local cada un segundo, sin rehacer todo el HTML de la mesa
+// (para no perder el foco si alguien está tipeando su apuesta).
+setInterval(() => {
+  if (!LB.table || casinoView !== 'live-blackjack') return;
+  const secs = lbSecondsLeft(LB.table);
+  const el = document.getElementById('lbTimer');
+  if (el && secs !== null) el.textContent = secs + 's';
+}, 1000);
 
 // ---------- init ----------
 (async function init() {

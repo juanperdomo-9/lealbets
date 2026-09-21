@@ -18,6 +18,8 @@ const penaltyRoutes = require('./routes/penalty');
 const minesRoutes = require('./routes/mines');
 const slotsRoutes = require('./routes/slots');
 const rouletteRoutes = require('./routes/roulette');
+const liveBlackjackRoutes = require('./routes/liveBlackjack');
+const liveBlackjackTable = require('./liveBlackjack');
 const lealHistoryRoutes = require('./routes/lealHistory');
 const lealMatchesRoutes = require('./routes/lealMatches');
 
@@ -41,6 +43,7 @@ async function main() {
   app.use('/api/mines', minesRoutes);
   app.use('/api/slots', slotsRoutes);
   app.use('/api/roulette', rouletteRoutes);
+  app.use('/api/live-blackjack', liveBlackjackRoutes);
   app.use('/api/leal-history', lealHistoryRoutes);
   app.use('/api/leal-matches', lealMatchesRoutes);
 
@@ -58,6 +61,7 @@ async function main() {
   server.listen(PORT, () => {
     console.log(`Leal Bets escuchando en el puerto ${PORT}`);
   });
+  liveBlackjackTable.startClock(); // reloj de la mesa en vivo: avanza sola aunque nadie toque nada
 }
 
 main().catch((e) => {

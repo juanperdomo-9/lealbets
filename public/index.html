@@ -79,10 +79,19 @@
     <section id="tab-casino">
       <div class="subtabs" id="casinoSubtabs">
         <button data-view="blackjack" class="active" onclick="setCasinoView('blackjack')">Blackjack</button>
+        <button data-view="live-blackjack" onclick="setCasinoView('live-blackjack')">Mesa en vivo</button>
         <button data-view="penalty" onclick="setCasinoView('penalty')">Penales</button>
         <button data-view="mines" onclick="setCasinoView('mines')">Minas</button>
         <button data-view="slots" onclick="setCasinoView('slots')">Tragamonedas</button>
         <button data-view="roulette" onclick="setCasinoView('roulette')">Ruleta</button>
+      </div>
+
+      <div id="casino-live-blackjack" class="casino-game">
+        <div class="card">
+          <h3>Mesa en vivo</h3>
+          <p class="lb-help-note">Blackjack compartido: se sientan varios en la misma mesa y juegan juntos — cada uno ve las cartas y las jugadas de los demás en el momento. La mesa arranca sola cuando hay alguien sentado.</p>
+        </div>
+        <div id="liveTableField"></div>
       </div>
 
       <div id="casino-blackjack" class="casino-game active">
