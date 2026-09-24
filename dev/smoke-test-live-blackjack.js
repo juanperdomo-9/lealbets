@@ -93,11 +93,11 @@ function totalPayout(seat) { return seat.hands.reduce((sum, h) => sum + h.payout
     `el saldo de p1 baja apuesta+side bets y sube todo lo que pagó (real ${bal1After}, esperado ${bal1Before - 130 + totalPayout(seat1)})`,
   );
   assert(bal2After === bal2Before - 200 + totalPayout(seat2), `el saldo de p2 baja la apuesta y sube lo que pagó (real ${bal2After}, esperado ${bal2Before - 200 + totalPayout(seat2)})`);
-  // reglas de pago de la mano principal: pleno perdido=0, empate=bet, blackjack=bet+1.5bet, gano normal=2bet
+  // reglas de pago de la mano principal: pleno perdido=0, empate=bet, blackjack=bet+2bet, gano normal=2bet
   const rulesOk = [seat1, seat2].every((seat) => seat.hands.every((hand) => {
     if (hand.result === 'lose') return hand.payout === 0;
     if (hand.result === 'push') return hand.payout === hand.bet;
-    if (hand.result === 'blackjack') return hand.payout === hand.bet + Math.round(hand.bet * 1.5);
+    if (hand.result === 'blackjack') return hand.payout === hand.bet + Math.round(hand.bet * 2);
     if (hand.result === 'win') return hand.payout === hand.bet * 2;
     return false;
   }));

@@ -983,7 +983,7 @@ section.active{display:block;animation:fadeIn .25s ease;}
    grid-column/grid-row inline. */
 .rl-felt{
   display:grid; grid-template-columns:1.15fr repeat(12, 1fr) 0.85fr;
-  grid-auto-rows:minmax(24px, auto); gap:2px;
+  grid-auto-rows:minmax(34px, auto); gap:3px;
   background:#0c3320; border:3px solid var(--gold-2); border-radius:var(--radius-md);
   padding:5px; margin-bottom:6px; box-shadow:inset 0 3px 12px rgba(0,0,0,.55);
 }
@@ -994,9 +994,9 @@ section.active{display:block;animation:fadeIn .25s ease;}
    prefijo ".card" para ganarle. */
 .card .rl-felt-cell{
   border:1px solid rgba(255,255,255,.16); background:#12261c; color:#fff;
-  font-family:var(--font-display); font-weight:700; font-size:9px; letter-spacing:.1px;
+  font-family:var(--font-display); font-weight:700; font-size:10px; letter-spacing:.1px;
   display:flex; align-items:center; justify-content:center; position:relative;
-  cursor:pointer; border-radius:3px; padding:1px; min-height:24px; line-height:1.05;
+  cursor:pointer; border-radius:3px; padding:1px; min-height:34px; line-height:1.05;
   box-shadow:none; transition:filter .12s ease;
 }
 .card .rl-felt-cell:active{filter:brightness(1.25);}
@@ -1011,7 +1011,7 @@ section.active{display:block;animation:fadeIn .25s ease;}
    tamaño — separado de la fila del "0" y de las columnas "2 a 1", que no
    tienen el mismo ancho. */
 .rl-numbers-wrap{position:relative;}
-.rl-numbers-grid{display:grid; grid-template-columns:repeat(12, 1fr); grid-template-rows:repeat(3, 1fr); gap:2px; height:100%;}
+.rl-numbers-grid{display:grid; grid-template-columns:repeat(12, 1fr); grid-template-rows:repeat(3, 1fr); gap:3px; height:100%;}
 .rl-hotspots{position:absolute; inset:0; pointer-events:none;}
 .card .rl-hotspot{
   position:absolute; width:13px; height:13px; margin:-6.5px 0 0 -6.5px; padding:0;
@@ -1022,20 +1022,24 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .card .rl-hotspot.active{background:var(--gold); border-color:#fff; box-shadow:0 0 6px rgba(240,194,90,.8);}
 .card button.rl-hotspot:disabled{opacity:.5; cursor:default;}
 .rl-bet-chip{
-  position:absolute; top:50%; left:50%; width:65%; height:65%; max-width:17px; max-height:17px;
-  transform:translate(-50%,-50%); border-radius:50%;
+  position:absolute; top:50%; left:50%; width:30px; height:30px;
+  transform:translate(-50%,-50%); border-radius:50%; z-index:3; pointer-events:none;
   background:radial-gradient(circle at 35% 28%, #fff6dc, var(--gold) 55%, var(--gold-2) 100%);
-  border:1.5px solid rgba(0,0,0,.55); box-shadow:0 1px 3px rgba(0,0,0,.65);
+  border:2px dashed rgba(0,0,0,.55); box-shadow:0 2px 5px rgba(0,0,0,.75), inset 0 0 0 2px rgba(255,255,255,.35);
   display:flex; align-items:center; justify-content:center;
-  font-family:var(--font-display); font-weight:700; font-size:5.5px; color:var(--ink); line-height:1;
+  font-family:var(--font-display); font-weight:700; font-size:9px; color:var(--ink); line-height:1;
 }
+.rl-bet-chip.rl-tier-2{background:radial-gradient(circle at 35% 28%, #9fe3ff, #2f8fd6 60%, #17547f 100%); color:#fff;}
+.rl-bet-chip.rl-tier-3{background:radial-gradient(circle at 35% 28%, #ff9a9a, var(--red) 60%, #8f1f1f 100%); color:#fff;}
+.rl-bet-chip.rl-tier-4{background:radial-gradient(circle at 35% 28%, #5a5a5a, #1a1a1a 65%, #000 100%); color:var(--gold); border-color:var(--gold);}
+.rl-bet-chip.rl-stacked{box-shadow:0 -3px 0 -1px rgba(0,0,0,.55), 0 -6px 0 -2px rgba(255,255,255,.35), 0 2px 5px rgba(0,0,0,.75), inset 0 0 0 2px rgba(255,255,255,.35);}
 .rl-bet-summary{text-align:center; font-size:11.5px; color:var(--chalk-dim); margin:0 0 14px; line-height:1.5;}
 .rl-bet-summary b{color:var(--gold); font-family:var(--font-display);}
 
 /* selector de valor de ficha + barra de herramientas del paño */
-.rl-chipvalue-row{display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:14px;}
+.rl-chipvalue-row{display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-bottom:14px;}
 .card .rl-chip.rl-chipvalue{
-  width:38px; height:38px; font-size:10.5px;
+  width:54px; height:54px; font-size:13px;
   background:radial-gradient(circle at 34% 28%, var(--surface-hover), var(--surface-2) 60%, var(--ink) 100%); color:var(--chalk);
 }
 .card .rl-chip.rl-chipvalue.active{
@@ -1045,10 +1049,14 @@ section.active{display:block;animation:fadeIn .25s ease;}
 .rl-felt-toolbar{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;}
 .rl-hotspot-toggle{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--chalk-dim); cursor:pointer;}
 .rl-hotspot-toggle input{margin:0; accent-color:var(--gold); width:15px; height:15px;}
-.card .rl-clear-btn{
-  margin:0; width:auto; padding:7px 13px; font-size:11px;
+.rl-toolbar-btns{display:flex; gap:6px; flex-wrap:wrap;}
+.card .rl-tool-btn{
+  margin:0; width:auto; padding:7px 12px; font-size:11px;
   background:none; color:var(--chalk-dim); border:1px solid var(--border); box-shadow:none;
 }
+.card .rl-tool-btn.rl-tool-on{background:var(--gold-soft); color:var(--gold); border-color:var(--gold);}
+.card .rl-tool-btn:disabled{opacity:.5; cursor:default;}
+.rl-remove-mode .rl-felt{border-color:var(--red); box-shadow:inset 0 3px 12px rgba(0,0,0,.55), 0 0 0 2px rgba(255,90,90,.35);}
 .card .rl-clear-btn:disabled{opacity:.5; cursor:default;}
 
 /* ---------------------------------- casino: mesa de blackjack en vivo ---------------------------------- */

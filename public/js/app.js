@@ -2743,7 +2743,9 @@ function rlColorLabel(c) { return c === 'red' ? 'rojo' : c === 'black' ? 'negro'
 
 const RL_CHIP_VALUES = [10, 50, 100, 500, 1000];
 let RL = {
-  bets: [], // {type, value, amount}[] — como fichas de verdad puestas en el paño, se puede tener varias a la vez
+  bets: [], // {type, value, amount}[] — como fichas de verdad puestas en el paño, se puede tener varias a la vez (y apilar varias en el mismo lugar)
+  placed: [], // pila de fichas puestas, para "Deshacer"
+  removeMode: false,
   chipValue: 100,
   showHotspots: false, // caballo/cuadro arrancan escondidos: menos cuadraditos, menos lío
   spinning: false, ballAngle: 0, history: [], lastResultText: '', lastWon: false,
@@ -2821,17 +2823,65 @@ function rlValuesEqual(a, b) {
 function rlFindBet(type, value) { return RL.bets.find((b) => b.type === type && rlValuesEqual(b.value, value)); }
 function rlHasBet(type, value) { return !!rlFindBet(type, value); }
 function rlCompactAmount(n) { return n >= 1000 ? (n % 1000 === 0 ? n / 1000 : (n / 1000).toFixed(1)) + 'K' : String(n); }
+// ficha grande sobre el casillero; el color cambia según cuánto hay apilado
+// ahí, y con más de una ficha se dibuja una pila (sombras escalonadas).
+function rlChipTier(amount) {
+  if (amount >= 1000) return 'rl-tier-4';
+  if (amount >= 500) return 'rl-tier-3';
+  if (amount >= 100) return 'rl-tier-2';
+  return 'rl-tier-1';
+}
 function rlChipMark(type, value) {
   const bet = rlFindBet(type, value);
-  return bet ? `<span class="rl-bet-chip">${rlCompactAmount(bet.amount)}</span>` : '';
+  if (!bet) return '';
+  const stacked = (bet.chips || 1) > 1 ? ' rl-stacked' : '';
+  return `<span class="rl-bet-chip ${rlChipTier(bet.amount)}${stacked}">${rlCompactAmount(bet.amount)}</span>`;
 }
-// tocar un casillero pone una ficha del valor elegido; volver a tocarlo la
-// saca (así se puede armar varias apuestas a la vez, como en una mesa real).
-function rlToggleBet(type, value) {
+// tocar un casillero pone una ficha del valor elegido; volver a tocar el
+// mismo lugar suma otra ficha encima (se apilan). En "modo quitar" cada toque
+// saca una ficha de ese lugar. RL.placed es la pila de lo que se fue poniendo,
+// para poder deshacer de a una.
+function rlAddChip(type, value) {
   if (RL.spinning) return;
+  if (RL.removeMode) { rlRemoveChipAt(type, value); return; }
+  const bet = rlFindBet(type, value);
+  if (bet) { bet.amount += RL.chipValue; bet.chips = (bet.chips || 1) + 1; }
+  else RL.bets.push({ type, value, amount: RL.chipValue, chips: 1 });
+  RL.placed.push({ type, value, amount: RL.chipValue });
+  renderRoulette();
+}
+function rlSubtractFromBet(type, value, amount) {
   const idx = RL.bets.findIndex((b) => b.type === type && rlValuesEqual(b.value, value));
-  if (idx >= 0) RL.bets.splice(idx, 1);
-  else RL.bets.push({ type, value, amount: RL.chipValue });
+  if (idx < 0) return 0;
+  const taken = Math.min(amount, RL.bets[idx].amount);
+  RL.bets[idx].amount -= taken;
+  RL.bets[idx].chips = Math.max(1, (RL.bets[idx].chips || 1) - 1);
+  if (RL.bets[idx].amount <= 0) RL.bets.splice(idx, 1);
+  return taken;
+}
+function rlRemoveChipAt(type, value) {
+  const taken = rlSubtractFromBet(type, value, RL.chipValue);
+  if (taken > 0) {
+    // sacamos también de la pila de "deshacer" lo equivalente, de atrás para adelante
+    let left = taken;
+    for (let i = RL.placed.length - 1; i >= 0 && left > 0; i--) {
+      const p = RL.placed[i];
+      if (p.type !== type || !rlValuesEqual(p.value, value)) continue;
+      const cut = Math.min(p.amount, left);
+      p.amount -= cut; left -= cut;
+      if (p.amount <= 0) RL.placed.splice(i, 1);
+    }
+  }
+  renderRoulette();
+}
+function rlUndoChip() {
+  if (RL.spinning || !RL.placed.length) return;
+  const last = RL.placed.pop();
+  rlSubtractFromBet(last.type, last.value, last.amount);
+  renderRoulette();
+}
+function rlToggleRemoveMode() {
+  RL.removeMode = !RL.removeMode;
   renderRoulette();
 }
 function rlSetChipValue(v) {
@@ -2841,6 +2891,7 @@ function rlSetChipValue(v) {
 function rlClearBets() {
   if (RL.spinning || !RL.bets.length) return;
   RL.bets = [];
+  RL.placed = [];
   renderRoulette();
 }
 function rlToggleHotspots() {
@@ -2861,7 +2912,7 @@ function rlBetLabel(type, value) {
 
 function rlFeltHtml() {
   const cell = (extraCls, gridCol, gridRow, type, value, label) => {
-    return `<button type="button" class="rl-felt-cell ${extraCls}${rlHasBet(type, value) ? ' active' : ''}" style="grid-column:${gridCol};grid-row:${gridRow};" onclick="rlToggleBet('${type}', ${rlOnclickVal(value)})">${label}${rlChipMark(type, value)}</button>`;
+    return `<button type="button" class="rl-felt-cell ${extraCls}${rlHasBet(type, value) ? ' active' : ''}" style="grid-column:${gridCol};grid-row:${gridRow};" onclick="rlAddChip('${type}', ${rlOnclickVal(value)})">${label}${rlChipMark(type, value)}</button>`;
   };
 
   let html = cell('rl-felt-zero', 1, '1/4', 'number', 0, '0');
@@ -2870,7 +2921,7 @@ function rlFeltHtml() {
     for (let r = 1; r <= 3; r++) {
       const num = rlFeltNumber(c, r);
       const colorCls = `rl-felt-${rlColorOf(num)}`;
-      numbersHtml += `<button type="button" class="rl-felt-cell ${colorCls}${rlHasBet('number', num) ? ' active' : ''}" style="grid-column:${c};grid-row:${r};" onclick="rlToggleBet('number', ${num})">${num}${rlChipMark('number', num)}</button>`;
+      numbersHtml += `<button type="button" class="rl-felt-cell ${colorCls}${rlHasBet('number', num) ? ' active' : ''}" style="grid-column:${c};grid-row:${r};" onclick="rlAddChip('number', ${num})">${num}${rlChipMark('number', num)}</button>`;
     }
   }
   html += `<div class="rl-numbers-wrap" style="grid-column:2/14;grid-row:1/4;">
@@ -2903,7 +2954,7 @@ function rlFeltHtml() {
 function rlHotspotsHtml() {
   const dot = (leftPct, topPct, type, value, title) => {
     const active = rlHasBet(type, value) ? ' active' : '';
-    return `<button type="button" class="rl-hotspot${active}" style="left:${leftPct}%;top:${topPct}%;" title="${title}" onclick="rlToggleBet('${type}', ${rlOnclickVal(value)})"></button>`;
+    return `<button type="button" class="rl-hotspot${active}" style="left:${leftPct}%;top:${topPct}%;" title="${title}" onclick="rlAddChip('${type}', ${rlOnclickVal(value)})"></button>`;
   };
   let html = '';
   // caballo horizontal: entre columnas vecinas, misma fila
@@ -2939,8 +2990,9 @@ function rlChipValueRowHtml() {
 }
 function rlBetSummaryText() {
   if (!RL.bets.length) return 'Todavía no pusiste ninguna ficha en el paño.';
-  const items = RL.bets.map((b) => `${rlBetLabel(b.type, b.value)} (${b.amount})`).join(' · ');
-  return `<b>${RL.bets.length}</b> ficha${RL.bets.length > 1 ? 's' : ''} puesta${RL.bets.length > 1 ? 's' : ''}: ${items} — total <b>${rlTotalStake()}</b>`;
+  const items = RL.bets.map((b) => `${rlBetLabel(b.type, b.value)} (${b.amount}${(b.chips || 1) > 1 ? `, ${b.chips} fichas` : ''})`).join(' · ');
+  const chips = RL.bets.reduce((n, b) => n + (b.chips || 1), 0);
+  return `<b>${chips}</b> ficha${chips > 1 ? 's' : ''} en ${RL.bets.length} lugar${RL.bets.length > 1 ? 'es' : ''}: ${items} — total <b>${rlTotalStake()}</b>`;
 }
 
 async function rlSpin() {
@@ -2954,7 +3006,7 @@ async function rlSpin() {
 
   let result;
   try {
-    result = await apiFetch('/roulette/spin', { method: 'POST', body: { bets: RL.bets } });
+    result = await apiFetch('/roulette/spin', { method: 'POST', body: { bets: RL.bets.map((b) => ({ type: b.type, value: b.value, amount: b.amount })) } });
   } catch (e) {
     RL.spinning = false;
     renderRoulette();
@@ -3004,7 +3056,11 @@ function renderRoulette() {
   const chipRow = document.getElementById('rlChipValueRow');
   const hotspotToggle = document.getElementById('rlHotspotToggle');
   const clearBtn = document.querySelector('.rl-clear-btn');
+  const undoBtn = document.getElementById('rlUndoBtn');
+  const removeBtn = document.getElementById('rlRemoveBtn');
   if (!field || !spinBtn || !feltBox || !summaryEl || !chipRow || !hotspotToggle) return;
+  if (removeBtn) removeBtn.classList.toggle('rl-tool-on', RL.removeMode);
+  feltBox.classList.toggle('rl-remove-mode', RL.removeMode);
 
   chipRow.innerHTML = rlChipValueRowHtml();
   hotspotToggle.checked = RL.showHotspots;
@@ -3021,6 +3077,8 @@ function renderRoulette() {
   spinBtn.disabled = RL.spinning || !RL.bets.length;
   spinBtn.textContent = RL.spinning ? 'Girando…' : 'Girar';
   if (clearBtn) clearBtn.disabled = RL.spinning || !RL.bets.length;
+  if (undoBtn) undoBtn.disabled = RL.spinning || !RL.placed.length;
+  if (removeBtn) removeBtn.disabled = RL.spinning || !RL.bets.length;
   document.querySelectorAll('#rlFeltBox button, #rlChipValueRow button').forEach((b) => { b.disabled = RL.spinning; });
 
   field.innerHTML = `
@@ -3327,8 +3385,10 @@ function renderLiveTable() {
   const myHandRevealed = myHand ? lbRevealedCount(myHand.cards.length, `s${seatedIdx}h${table.currentHandIndex}`) === myHand.cards.length : false;
   const tableFull = table.seats.every(Boolean);
   const dealerCardsHtml = lbDealerCardsHtml(table);
-  const dealerFullyRevealed = !LB.anim.dealOrder.d || LB.anim.dealOrder.d[1] < LB.anim.revealedSlots;
-  const dealerTotal = (!table.dealerHidden && dealerFullyRevealed) ? `<div class="lb-total">${bjHandTotal(table.dealerHand)}</div>` : '';
+  // el total del dealer recién aparece cuando termina de destapar TODAS sus
+  // cartas (antes se calculaba con la mano completa aunque todavía se
+  // estuvieran mostrando de a una, y adelantaba el número).
+  const dealerTotal = lbDealerFullyRevealed(table) ? `<div class="lb-total">${bjHandTotal(table.dealerHand)}</div>` : '';
 
   let controlsHtml = '';
   if (!ME) {

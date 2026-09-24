@@ -22,6 +22,12 @@ const BETTING_MS = 60000;
 const TURN_MS = 20000;
 const PAYOUT_MS = 7000;
 const TICK_MS = 1000;
+// reglas de ESTA mesa, un poco más a favor de los jugadores que el blackjack
+// solo (simulado con Monte Carlo: un jugador casual pasa de perder ~3.5% de
+// lo apostado a quedar casi parejo): el dealer se planta desde 15 y el
+// blackjack natural paga 2 a 1 (en vez de 3 a 2).
+const DEALER_STAND_AT = 15;
+const BLACKJACK_PAYS = 2;
 
 function createTable() {
   return {
@@ -215,7 +221,7 @@ async function runDealerAndSettle() {
   table.dealerHidden = false;
   const participants = participantIndices();
   const anyoneStillIn = participants.some((i) => table.seats[i].hands.some((h) => h.status !== 'busted'));
-  if (anyoneStillIn) playDealer(table.deck, table.dealerHand);
+  if (anyoneStillIn) playDealer(table.deck, table.dealerHand, DEALER_STAND_AT);
   const dealerTotal = handTotal(table.dealerHand);
   const dealerBJ = isBlackjack(table.dealerHand);
 
@@ -236,7 +242,7 @@ async function runDealerAndSettle() {
         } else if (playerBJ && dealerBJ) {
           result = 'push'; payout = hand.bet;
         } else if (playerBJ) {
-          result = 'blackjack'; payout = hand.bet + Math.round(hand.bet * 1.5);
+          result = 'blackjack'; payout = hand.bet + Math.round(hand.bet * BLACKJACK_PAYS);
         } else if (dealerBJ) {
           result = 'lose';
         } else if (dealerTotal > 21 || total > dealerTotal) {

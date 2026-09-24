@@ -89,7 +89,7 @@
       <div id="casino-live-blackjack" class="casino-game">
         <div class="card">
           <h3>Mesa en vivo</h3>
-          <p class="lb-help-note">Blackjack compartido: se sientan varios en la misma mesa y juegan juntos — cada uno ve las cartas y las jugadas de los demás en el momento. La mesa arranca sola cuando hay alguien sentado.</p>
+          <p class="lb-help-note">Blackjack compartido: se sientan varios en la misma mesa y juegan juntos — cada uno ve las cartas y las jugadas de los demás en el momento. La mesa arranca sola cuando hay alguien sentado. Reglas de esta mesa: el dealer se planta desde 15 y el blackjack natural paga 2 a 1.</p>
         </div>
         <div id="liveTableField"></div>
       </div>
@@ -182,9 +182,13 @@
           <div class="rl-chipvalue-row" id="rlChipValueRow"></div>
           <div class="rl-felt-toolbar">
             <label class="rl-hotspot-toggle"><input type="checkbox" id="rlHotspotToggle" onchange="rlToggleHotspots()"> Mostrar caballo y cuadro</label>
-            <button type="button" class="reopen-btn rl-clear-btn" onclick="rlClearBets()">Borrar apuestas</button>
+            <div class="rl-toolbar-btns">
+              <button type="button" class="reopen-btn rl-tool-btn" id="rlRemoveBtn" onclick="rlToggleRemoveMode()">Quitar ficha</button>
+              <button type="button" class="reopen-btn rl-tool-btn" id="rlUndoBtn" onclick="rlUndoChip()">Deshacer</button>
+              <button type="button" class="reopen-btn rl-tool-btn rl-clear-btn" onclick="rlClearBets()">Borrar todo</button>
+            </div>
           </div>
-          <label>Tocá el paño para poner (o sacar) una ficha — podés poner varias a la vez</label>
+          <label id="rlFeltHint">Tocá el paño para poner una ficha — tocá de nuevo el mismo lugar para sumar otra ficha encima</label>
           <div id="rlFeltBox"></div>
           <p class="rl-bet-summary" id="rlBetSummary"></p>
           <button id="rlSpinBtn" onclick="rlSpin()">Girar</button>
